@@ -291,7 +291,7 @@ class Client {
         /**
          * 列出所有对象（数据表）
          * @param params 请求参数 { offset?, filter?, limit? }
-         * @returns 接口返回结果，包含 has_more 字段表示是否还有更多数据
+         * @returns 接口返回结果 { code, items, total, msg, has_more }
          */
         list: async (params?: { offset?: number; filter?: { type?: string; quickQuery?: string }; limit?: number }): Promise<any> => {
             const offset = params?.offset ?? 0;
@@ -314,24 +314,36 @@ class Client {
             this.log(LoggerLevel.debug, `[object.list] Objects list fetched successfully: code=${res.data.code}`);
             this.log(LoggerLevel.trace, `[object.list] Response: ${JSON.stringify(res.data)}`);
             
-            // 添加 has_more 字段判断是否还有更多数据
-            if (res.data && res.data.data) {
-                const total = res.data.data.total || 0;
-                const currentEnd = offset + limit;
-                res.data.has_more = currentEnd < total;
-                this.log(LoggerLevel.debug, `[object.list] has_more=${res.data.has_more}, total=${total}, currentEnd=${currentEnd}`);
-            }
+            // 扁平化返回结构并添加 has_more 字段
+            const items = res.data?.data?.items || [];
+            const total = res.data?.data?.total || 0;
+            const currentEnd = offset + limit;
+            const has_more = currentEnd < total;
             
-            return res.data;
+            this.log(LoggerLevel.debug, `[object.list] has_more=${has_more}, total=${total}, currentEnd=${currentEnd}`);
+            
+            return {
+                code: res.data.code,
+                items,
+                total,
+                msg: res.data.msg,
+                has_more
+            };
         },
 
         /**
          * 列出所有对象（数据表）- 支持自动分页查询
          * @description 该方法会自动处理分页，直到没有更多数据为止
          * @param params 请求参数 { filter?, limit? }
-         * @returns { total, items }
+         * @returns { code, msg, items, total, failed? } - code 表示失败的分页数量
          */
-        listWithIterator: async (params?: { filter?: { type?: string; quickQuery?: string }; limit?: number }): Promise<{ total: number; items: any[] }> => {
+        listWithIterator: async (params?: { filter?: { type?: string; quickQuery?: string }; limit?: number }): Promise<{ 
+            code: string; 
+            msg: string; 
+            items: any[]; 
+            total: number; 
+            failed?: Array<{ offset: number; limit: number; code: string; msg: string }> 
+        }> => {
             const filter = params?.filter;
             const limit = params?.limit ?? 50;
             
@@ -341,51 +353,101 @@ class Client {
             let hasMore = true;
             let page = 0;
             let totalPages = 0;
+            let failed: Array<{ offset: number; limit: number; code: string; msg: string }> = [];
+            let allSuccess = true;
 
             this.log(LoggerLevel.info, `[object.listWithIterator] Starting paginated query with limit=${limit}`);
 
             while (hasMore) {
-                const res = await this.object.list({
-                    offset,
-                    limit,
-                    filter
-                });
+                try {
+                    const res = await this.object.list({
+                        offset,
+                        limit,
+                        filter
+                    });
 
-                if (res.code !== '0') {
-                    this.log(LoggerLevel.error, `[object.listWithIterator] Error querying objects: code=${res.code}, msg=${res.msg}`);
-                    throw new Error(res.msg || `Query failed with code ${res.code}`);
+                    if (res.code !== '0') {
+                        this.log(LoggerLevel.error, `[object.listWithIterator] Error querying objects: code=${res.code}, msg=${res.msg}, offset=${offset}`);
+                        allSuccess = false;
+                        failed.push({
+                            offset,
+                            limit,
+                            code: res.code,
+                            msg: res.msg || `Query failed with code ${res.code}`
+                        });
+                        // 继续尝试下一页，而不是直接退出
+                        offset += limit;
+                        page += 1;
+                        continue;
+                    }
+
+                    page += 1;
+
+                    if (Array.isArray(res.items)) {
+                        results = results.concat(res.items);
+                    }
+
+                    if (res.total !== undefined && res.total !== null) {
+                        total = res.total;
+                    }
+
+                    if (page === 1) {
+                        totalPages = Math.ceil(total / limit);
+                        this.log(LoggerLevel.info, `[object.listWithIterator] Total objects: ${total}, pages: ${totalPages}`);
+                    }
+
+                    // 判断是否还有更多数据
+                    hasMore = res.has_more === true;
+                    offset += limit;
+
+                    const padLength = totalPages.toString().length;
+                    const pageStr = page.toString().padStart(padLength, '0');
+                    const totalPagesStr = totalPages.toString().padStart(padLength, '0');
+
+                    this.log(LoggerLevel.info, `[object.listWithIterator] Page completed: [${pageStr}/${totalPagesStr}]`);
+                    this.log(LoggerLevel.debug, `[object.listWithIterator] Page ${page} details: items=${res.items?.length}, hasMore=${hasMore}`);
+                    this.log(LoggerLevel.trace, `[object.listWithIterator] Page ${page} data: ${JSON.stringify(res.items)}`);
+                } catch (error) {
+                    this.log(LoggerLevel.error, `[object.listWithIterator] Exception occurred: ${error}, offset=${offset}`);
+                    allSuccess = false;
+                    failed.push({
+                        offset,
+                        limit,
+                        code: '1',
+                        msg: error instanceof Error ? error.message : String(error)
+                    });
+                    // 继续尝试下一页
+                    offset += limit;
+                    page += 1;
+                    
+                    // 如果没有获取到 total，可能需要退出循环
+                    if (total === 0) {
+                        hasMore = false;
+                    } else {
+                        hasMore = offset < total;
+                    }
                 }
-
-                page += 1;
-
-                if (res.data && Array.isArray(res.data.items)) {
-                    results = results.concat(res.data.items);
-                }
-
-                if (res.data && (res.data.total !== undefined && res.data.total !== null)) {
-                    total = res.data.total;
-                }
-
-                if (page === 1) {
-                    totalPages = Math.ceil(total / limit);
-                    this.log(LoggerLevel.info, `[object.listWithIterator] Total objects: ${total}, pages: ${totalPages}`);
-                }
-
-                // 判断是否还有更多数据
-                hasMore = res.has_more === true;
-                offset += limit;
-
-                const padLength = totalPages.toString().length;
-                const pageStr = page.toString().padStart(padLength, '0');
-                const totalPagesStr = totalPages.toString().padStart(padLength, '0');
-
-                this.log(LoggerLevel.info, `[object.listWithIterator] Page completed: [${pageStr}/${totalPagesStr}]`);
-                this.log(LoggerLevel.debug, `[object.listWithIterator] Page ${page} details: items=${res.data?.items?.length}, hasMore=${hasMore}`);
-                this.log(LoggerLevel.trace, `[object.listWithIterator] Page ${page} data: ${JSON.stringify(res.data?.items)}`);
             }
 
-            this.log(LoggerLevel.info, `[object.listWithIterator] Completed: total=${total}, fetched=${results.length}`);
-            return { total, items: results };
+            const resultCode = failed.length.toString();
+            const resultMsg = failed.length === 0
+                ? 'Success' 
+                : `Completed with ${failed.length} failed page(s)`;
+
+            this.log(LoggerLevel.info, `[object.listWithIterator] Completed: code=${resultCode}, total=${total}, fetched=${results.length}, failed=${failed.length}`);
+            
+            const result: any = {
+                code: resultCode,
+                msg: resultMsg,
+                items: results,
+                total
+            };
+            
+            if (failed.length > 0) {
+                result.failed = failed;
+            }
+            
+            return result;
         },
 
         metadata: {
