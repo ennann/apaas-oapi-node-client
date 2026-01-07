@@ -290,11 +290,13 @@ class Client {
     public object = {
         /**
          * 列出所有对象（数据表）
-         * @param params 请求参数 { offset, filter?, limit }
-         * @returns 接口返回结果
+         * @param params 请求参数 { offset?, filter?, limit? }
+         * @returns 接口返回结果，包含 has_more 字段表示是否还有更多数据
          */
-        list: async (params: { offset: number; filter?: { type?: string; quickQuery?: string }; limit: number }): Promise<any> => {
-            const { offset, filter, limit } = params;
+        list: async (params?: { offset?: number; filter?: { type?: string; quickQuery?: string }; limit?: number }): Promise<any> => {
+            const offset = params?.offset ?? 0;
+            const limit = params?.limit ?? 50;
+            const filter = params?.filter;
             await this.ensureTokenValid();
             const url = `/api/data/v1/namespaces/${this.namespace}/meta/objects/list`;
 
@@ -311,7 +313,79 @@ class Client {
 
             this.log(LoggerLevel.debug, `[object.list] Objects list fetched successfully: code=${res.data.code}`);
             this.log(LoggerLevel.trace, `[object.list] Response: ${JSON.stringify(res.data)}`);
+            
+            // 添加 has_more 字段判断是否还有更多数据
+            if (res.data && res.data.data) {
+                const total = res.data.data.total || 0;
+                const currentEnd = offset + limit;
+                res.data.has_more = currentEnd < total;
+                this.log(LoggerLevel.debug, `[object.list] has_more=${res.data.has_more}, total=${total}, currentEnd=${currentEnd}`);
+            }
+            
             return res.data;
+        },
+
+        /**
+         * 列出所有对象（数据表）- 支持自动分页查询
+         * @description 该方法会自动处理分页，直到没有更多数据为止
+         * @param params 请求参数 { filter?, limit? }
+         * @returns { total, items }
+         */
+        listWithIterator: async (params?: { filter?: { type?: string; quickQuery?: string }; limit?: number }): Promise<{ total: number; items: any[] }> => {
+            const filter = params?.filter;
+            const limit = params?.limit ?? 50;
+            
+            let results: any[] = [];
+            let offset = 0;
+            let total = 0;
+            let hasMore = true;
+            let page = 0;
+            let totalPages = 0;
+
+            this.log(LoggerLevel.info, `[object.listWithIterator] Starting paginated query with limit=${limit}`);
+
+            while (hasMore) {
+                const res = await this.object.list({
+                    offset,
+                    limit,
+                    filter
+                });
+
+                if (res.code !== '0') {
+                    this.log(LoggerLevel.error, `[object.listWithIterator] Error querying objects: code=${res.code}, msg=${res.msg}`);
+                    throw new Error(res.msg || `Query failed with code ${res.code}`);
+                }
+
+                page += 1;
+
+                if (res.data && Array.isArray(res.data.items)) {
+                    results = results.concat(res.data.items);
+                }
+
+                if (res.data && (res.data.total !== undefined && res.data.total !== null)) {
+                    total = res.data.total;
+                }
+
+                if (page === 1) {
+                    totalPages = Math.ceil(total / limit);
+                    this.log(LoggerLevel.info, `[object.listWithIterator] Total objects: ${total}, pages: ${totalPages}`);
+                }
+
+                // 判断是否还有更多数据
+                hasMore = res.has_more === true;
+                offset += limit;
+
+                const padLength = totalPages.toString().length;
+                const pageStr = page.toString().padStart(padLength, '0');
+                const totalPagesStr = totalPages.toString().padStart(padLength, '0');
+
+                this.log(LoggerLevel.info, `[object.listWithIterator] Page completed: [${pageStr}/${totalPagesStr}]`);
+                this.log(LoggerLevel.debug, `[object.listWithIterator] Page ${page} details: items=${res.data?.items?.length}, hasMore=${hasMore}`);
+                this.log(LoggerLevel.trace, `[object.listWithIterator] Page ${page} data: ${JSON.stringify(res.data?.items)}`);
+            }
+
+            this.log(LoggerLevel.info, `[object.listWithIterator] Completed: total=${total}, fetched=${results.length}`);
+            return { total, items: results };
         },
 
         metadata: {
@@ -479,6 +553,52 @@ class Client {
                 }
 
                 return { total, items: results };
+            },
+
+            /**
+             * 统计记录数量
+             * @description 统计指定对象中的记录总数，支持按条件统计
+             * @param params 请求参数 { object_name, data? }
+             * @returns 接口返回结果 { code, total, msg }
+             */
+            count: async (params: { object_name: string; data?: any }): Promise<any> => {
+                const { object_name, data } = params;
+
+                // 默认查询参数：最小化数据传输，只获取总数
+                const defaultData = {
+                    offset: 0,
+                    page_size: 1,
+                    need_total_count: true,
+                    use_page_token: true,
+                    select: ['_id'],
+                    query_deleted_record: false
+                };
+
+                // 合并用户传入的参数（用户参数优先）
+                const queryData = data ? { ...defaultData, ...data } : defaultData;
+
+                this.log(LoggerLevel.info, `[object.search.count] Counting records in: ${object_name}`);
+                this.log(LoggerLevel.debug, `[object.search.count] Query data: ${JSON.stringify(queryData)}`);
+
+                const res = await this.object.search.records({
+                    object_name,
+                    data: queryData
+                });
+
+                if (res.code !== '0') {
+                    this.log(LoggerLevel.error, `[object.search.count] Error counting records: code=${res.code}, msg=${res.msg}`);
+                    throw new Error(res.msg || `Count failed with code ${res.code}`);
+                }
+
+                const total = res.data?.total || 0;
+                this.log(LoggerLevel.info, `[object.search.count] Total records in ${object_name}: ${total}`);
+
+                // 返回格式：{ code, total, msg }
+                return {
+                    code: res.code,
+                    total: total,
+                    msg: res.msg
+                };
             }
         },
 
