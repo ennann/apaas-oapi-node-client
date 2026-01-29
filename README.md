@@ -16,6 +16,7 @@
 - ✅ record 单条查询
 - ✅ record 单条更新、批量更新
 - ✅ record 单条删除、批量删除
+- ✅ **导出数据对象文档为 Markdown**
 - ✅ 内置 Bottleneck 限流器
 - ✅ 自定义日志等级
 

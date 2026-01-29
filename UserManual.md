@@ -332,6 +332,49 @@ const res = await client.object.metadata.fields({
 console.log(res);
 ```
 
+### **导出数据对象文档为 Markdown**
+
+将数据对象的元数据导出为详细的 Markdown 文档，包含完整的字段信息、类型、配置等。
+
+```JavaScript
+const fs = require('fs');
+
+// 方式一：导出所有对象（推荐，无需参数）
+const markdown = await client.object.metadata.export2markdown();
+fs.writeFileSync('all_objects.md', markdown, 'utf-8');
+
+// 方式二：只导出指定的对象
+const markdown2 = await client.object.metadata.export2markdown({
+  object_names: ['object_store', 'object_order', '_user']
+});
+fs.writeFileSync('specific_objects.md', markdown2, 'utf-8');
+
+// 方式三：结合 listWithIterator 灵活筛选
+const allObjects = await client.object.listWithIterator();
+const customObjects = allObjects.items
+  .filter(obj => !obj.apiName.startsWith('_'))  // 只要自定义对象
+  .map(obj => obj.apiName);
+
+const markdown3 = await client.object.metadata.export2markdown({
+  object_names: customObjects
+});
+fs.writeFileSync('custom_objects.md', markdown3, 'utf-8');
+
+console.log('✅ 文档导出成功！');
+```
+
+**生成的 Markdown 文档包含：**
+- 📋 自动生成的目录（带锚点链接）
+- 📊 每个对象的详细信息（中英文名称、创建时间、字段数量）
+- 📝 字段列表（中文名称、API名称、类型、必填、唯一性）
+- ⚙️ 字段配置详情：
+  - 选项字段：展示所有选项值
+  - 公式字段：显示公式表达式和返回类型
+  - 引用字段：显示引用来源和字段
+  - lookup 字段：显示关联对象
+  - 其他配置：最大长度、小数位、显示样式等
+- 🎯 字段智能排序（系统字段、业务字段、公式字段分类展示）
+
 ***
 
 

@@ -493,6 +493,267 @@ class Client {
                 this.log(LoggerLevel.debug, `[object.metadata.fields] All fields metadata fetched: ${object_name}, code=${res.data.code}`);
                 this.log(LoggerLevel.trace, `[object.metadata.fields] Response: ${JSON.stringify(res.data)}`);
                 return res.data;
+            },
+
+            /**
+             * 导出数据对象元数据为 Markdown 文档
+             * @description 将数据对象的字段信息导出为详细的 Markdown 文档，包含字段类型、配置、选项等完整信息
+             * @param options 导出配置
+             * @param options.object_names 可选，要导出的对象名称数组。如果不传，则导出所有对象
+             * @returns Markdown 文档字符串
+             * @example
+             * ```typescript
+             * // 导出所有对象
+             * const markdown = await client.object.metadata.export2markdown();
+             * 
+             * // 只导出指定对象
+             * const markdown = await client.object.metadata.export2markdown({
+             *   object_names: ['object_store', 'object_order', '_user']
+             * });
+             * 
+             * // 结合 listWithIterator 使用
+             * const allObjects = await client.object.listWithIterator();
+             * const objectNames = allObjects.items.map(obj => obj.apiName);
+             * const markdown = await client.object.metadata.export2markdown({
+             *   object_names: objectNames
+             * });
+             * 
+             * // 保存到文件
+             * fs.writeFileSync('objects_doc.md', markdown, 'utf-8');
+             * ```
+             */
+            export2markdown: async (options?: { object_names?: string[] }): Promise<string> => {
+                const objectNames = options?.object_names;
+
+                this.log(LoggerLevel.info, `[object.metadata.export2markdown] Starting markdown export${objectNames && objectNames.length > 0 ? ` for ${objectNames.length} objects` : ' for all objects'}`);
+
+                let items: any[] = [];
+
+                if (objectNames && objectNames.length > 0) {
+                    // 如果指定了对象名称，只获取这些对象
+                    this.log(LoggerLevel.debug, `[object.metadata.export2markdown] Fetching specified objects: ${objectNames.join(', ')}`);
+                    
+                    // 先获取所有对象列表
+                    const allObjects = await this.object.listWithIterator();
+                    
+                    // 过滤出指定的对象
+                    items = allObjects.items.filter((obj: any) => objectNames.includes(obj.apiName));
+                    
+                    // 检查是否有不存在的对象
+                    if (items.length < objectNames.length) {
+                        const foundNames = items.map((obj: any) => obj.apiName);
+                        const notFound = objectNames.filter(name => !foundNames.includes(name));
+                        this.log(LoggerLevel.warn, `[object.metadata.export2markdown] Objects not found: ${notFound.join(', ')}`);
+                    }
+                    
+                    this.log(LoggerLevel.debug, `[object.metadata.export2markdown] Found ${items.length}/${objectNames.length} matching objects`);
+                    
+                    if (items.length === 0) {
+                        this.log(LoggerLevel.warn, `[object.metadata.export2markdown] No matching objects found`);
+                        return '# 数据对象字段文档\n\n> 未找到匹配的对象\n';
+                    }
+                } else {
+                    // 获取所有对象
+                    this.log(LoggerLevel.debug, `[object.metadata.export2markdown] Fetching all objects`);
+                    const allObjects = await this.object.listWithIterator();
+                    items = allObjects.items || [];
+                }
+
+                this.log(LoggerLevel.debug, `[object.metadata.export2markdown] Fetched ${items.length} objects`);
+
+                // 生成 Markdown 文档
+                let markdown = '# 数据对象字段文档\n\n';
+                markdown += `> 生成时间: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}\n\n`;
+                markdown += `> 对象总数: ${items.length}\n\n`;
+                markdown += '---\n\n';
+
+                // 目录
+                markdown += '## 目录\n\n';
+                items.forEach((obj: any, index: number) => {
+                    const chineseName = obj.label?.zh_CN || obj.label?.en_US || obj.apiName;
+                    markdown += `${index + 1}. [${chineseName} (${obj.apiName})](#${obj.apiName.replace(/_/g, '')})\n`;
+                });
+                markdown += '\n---\n\n';
+
+                // 遍历每个对象
+                for (const obj of items) {
+                    const chineseName = obj.label?.zh_CN || obj.label?.en_US || obj.apiName;
+                    const englishName = obj.label?.en_US || '';
+
+                    markdown += `## ${chineseName} \`${obj.apiName}\`\n\n`;
+
+                    if (englishName && englishName !== chineseName) {
+                        markdown += `**英文名称:** ${englishName}\n\n`;
+                    }
+
+                    markdown += `**创建时间:** ${dayjs(obj.createdAt).format('YYYY-MM-DD HH:mm:ss')}\n\n`;
+                    markdown += `**字段数量:** ${obj.fields?.length || 0}\n\n`;
+
+                    // 字段表格
+                    if (obj.fields && obj.fields.length > 0) {
+                        // 对字段进行分类和排序
+                        const systemFieldOrder = ['_name', '_createdBy', '_createdAt', '_updatedBy', '_updatedAt'];
+                        const specialFieldTypes = ['formula', 'referenceField'];
+
+                        let idField: any = null;
+                        const normalFields: any[] = [];
+                        const specialFields: any[] = [];
+                        const systemFields: any[] = [];
+
+                        obj.fields.forEach((field: any) => {
+                            if (field.apiName === '_id') {
+                                idField = field;
+                            } else if (systemFieldOrder.includes(field.apiName)) {
+                                systemFields.push(field);
+                            } else if (specialFieldTypes.includes(field.type?.name)) {
+                                specialFields.push(field);
+                            } else {
+                                normalFields.push(field);
+                            }
+                        });
+
+                        // 对系统字段按指定顺序排序
+                        systemFields.sort((a, b) => {
+                            return systemFieldOrder.indexOf(a.apiName) - systemFieldOrder.indexOf(b.apiName);
+                        });
+
+                        // 组合所有字段：_id + 正常字段 + 特殊字段 + 系统字段
+                        const sortedFields: any[] = [];
+                        if (idField) sortedFields.push(idField);
+                        sortedFields.push(...normalFields);
+                        sortedFields.push(...specialFields);
+                        sortedFields.push(...systemFields);
+
+                        markdown += '### 字段列表\n\n';
+                        markdown += '| 中文名称 | API名称 | 类型 | 必填 | 唯一 | 其他设置 |\n';
+                        markdown += '|---------|---------|------|------|------|----------|\n';
+
+                        for (const field of sortedFields) {
+                            // 转义 Markdown 表格中的特殊字符
+                            const escapeMarkdown = (text: string): string => {
+                                return text.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+                            };
+
+                            const label = escapeMarkdown(field.label?.zh_CN || field.label?.en_US || '-');
+                            const apiName = field.apiName || '-';
+                            const typeName = field.type?.name || '-';
+                            const required = field.type?.settings?.required ? '✓' : '';
+                            const unique = field.type?.settings?.unique ? '✓' : '';
+
+                            // 构建其他设置信息
+                            const otherSettings: string[] = [];
+                            const settings = field.type?.settings || {};
+
+                            // lookup 类型：标注关联的对象（外键）
+                            if (field.type?.name === 'lookup' && settings.objectAPIName) {
+                                otherSettings.push(`🔗 关联对象: \`${settings.objectAPIName}\``);
+                            }
+
+                            // referenceField 类型：引用字段
+                            if (field.type?.name === 'referenceField') {
+                                otherSettings.push(`⚙️ 系统自动维护，不需要写/更新`);
+                                if (settings.guideFieldAPIName) {
+                                    otherSettings.push(`📎 引用自: \`${settings.guideFieldAPIName}\``);
+                                }
+                                if (settings.fieldAPIName) {
+                                    otherSettings.push(`📋 引用字段: \`${settings.fieldAPIName}\``);
+                                }
+                            }
+
+                            // formula 类型：系统自动维护
+                            if (field.type?.name === 'formula') {
+                                otherSettings.push(`⚙️ 系统自动维护，不需要写/更新`);
+                                if (settings.formula && Array.isArray(settings.formula)) {
+                                    // 优先显示中文公式，否则显示第一个
+                                    const zhFormula = settings.formula.find((f: any) => f.language_code === 2052);
+                                    const formulaText = zhFormula?.text || settings.formula[0]?.text;
+                                    if (formulaText) {
+                                        // 转义公式中的特殊字符
+                                        const escapedFormula = formulaText.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+                                        otherSettings.push(`公式: ${escapedFormula}`);
+                                    }
+                                }
+                                if (settings.returnType) {
+                                    otherSettings.push(`返回类型: ${settings.returnType}`);
+                                }
+                            }
+
+                            // 根据不同类型展示不同的设置
+                            if (settings.maxLength) {
+                                otherSettings.push(`最大长度:${settings.maxLength}`);
+                            }
+                            if (settings.decimalPlacesNumber !== undefined) {
+                                otherSettings.push(`小数位:${settings.decimalPlacesNumber}`);
+                            }
+                            if (settings.displayAsPercentage) {
+                                otherSettings.push('百分比显示');
+                            }
+                            if (settings.multiline) {
+                                otherSettings.push('多行');
+                            }
+                            if (settings.multiple) {
+                                otherSettings.push('多选');
+                            }
+                            if (settings.hierarchy) {
+                                otherSettings.push('层级');
+                            }
+                            if (settings.displayStyle && field.type?.name !== 'lookup') {
+                                otherSettings.push(`显示样式:${settings.displayStyle}`);
+                            }
+                            if (settings.referenceObjectApiName) {
+                                otherSettings.push(`关联:${settings.referenceObjectApiName}`);
+                            }
+                            if (settings.rollUpType) {
+                                otherSettings.push(`汇总:${settings.rollUpType}`);
+                            }
+
+                            // 如果是 option 类型，获取选项列表
+                            if (field.type?.name === 'option') {
+                                // 优先使用已有的 optionList，避免额外 API 请求
+                                const options = settings.optionList;
+                                if (options && options.length > 0) {
+                                    const optionTexts = options.map((opt: any) => {
+                                        const zhLabel = opt.label?.find((l: any) => l.language_code === 2052)?.text || '-';
+                                        return `${zhLabel}(\`${opt.apiName}\`)`;
+                                    });
+                                    otherSettings.push(`选项: ${optionTexts.join(', ')}`);
+                                } else {
+                                    // 如果没有 optionList，再尝试单独请求（但这可能很慢）
+                                    try {
+                                        this.log(LoggerLevel.debug, `[object.metadata.export2markdown] Fetching option details for ${obj.apiName}.${field.apiName}`);
+                                        const optionsResult = await this.object.metadata.field({
+                                            object_name: obj.apiName,
+                                            field_name: field.apiName
+                                        });
+
+                                        const fetchedOptions = optionsResult?.data?.type?.settings?.optionList;
+                                        if (fetchedOptions && fetchedOptions.length > 0) {
+                                            const optionTexts = fetchedOptions.map((opt: any) => {
+                                                const zhLabel = opt.label?.find((l: any) => l.language_code === 2052)?.text || '-';
+                                                return `${zhLabel}(\`${opt.apiName}\`)`;
+                                            });
+                                            otherSettings.push(`选项: ${optionTexts.join(', ')}`);
+                                        }
+                                    } catch (error) {
+                                        this.log(LoggerLevel.warn, `[object.metadata.export2markdown] Failed to fetch option field details for ${obj.apiName}.${field.apiName}:`, error);
+                                    }
+                                }
+                            }
+
+                            const otherSettingsStr = otherSettings.length > 0 ? otherSettings.join('<br>') : '-';
+
+                            markdown += `| ${label} | \`${apiName}\` | ${typeName} | ${required} | ${unique} | ${otherSettingsStr} |\n`;
+                        }
+
+                        markdown += '\n';
+                    }
+
+                    markdown += '---\n\n';
+                }
+
+                this.log(LoggerLevel.info, `[object.metadata.export2markdown] Markdown export completed`);
+
+                return markdown;
             }
         },
 
