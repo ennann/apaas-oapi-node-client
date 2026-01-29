@@ -593,7 +593,7 @@ class Client {
                     if (obj.fields && obj.fields.length > 0) {
                         // 对字段进行分类和排序
                         const systemFieldOrder = ['_name', '_createdBy', '_createdAt', '_updatedBy', '_updatedAt'];
-                        const specialFieldTypes = ['formula', 'referenceField'];
+                        const specialFieldTypes = ['formula', 'referenceField', 'rollup'];
 
                         let idField: any = null;
                         const normalFields: any[] = [];
@@ -675,6 +675,41 @@ class Client {
                                 }
                                 if (settings.returnType) {
                                     otherSettings.push(`返回类型: ${settings.returnType}`);
+                                }
+                            }
+
+                            // rollup 类型：汇总字段
+                            if (field.type?.name === 'rollup') {
+                                otherSettings.push(`⚙️ 系统自动维护，不需要写/更新`);
+                                
+                                // 汇总函数类型映射
+                                const functionTypeMap: { [key: string]: string } = {
+                                    'count': '计数',
+                                    'sum': '求和',
+                                    'avg': '平均值',
+                                    'max': '最大值',
+                                    'min': '最小值',
+                                    'countDistinct': '去重计数'
+                                };
+                                const functionType = functionTypeMap[settings.functionType] || settings.functionType;
+                                if (functionType) {
+                                    otherSettings.push(`📊 汇总类型: ${functionType}`);
+                                }
+                                
+                                if (settings.objectAPIName) {
+                                    otherSettings.push(`📦 汇总对象: \`${settings.objectAPIName}\``);
+                                }
+                                
+                                if (settings.lookupFieldAPIName) {
+                                    otherSettings.push(`🔗 关联字段: \`${settings.lookupFieldAPIName}\``);
+                                }
+                                
+                                if (settings.fieldAPIName) {
+                                    otherSettings.push(`📋 汇总字段: \`${settings.fieldAPIName}\``);
+                                }
+                                
+                                if (settings.rangeFilter && settings.rangeFilter.conditions && settings.rangeFilter.conditions.length > 0) {
+                                    otherSettings.push(`🔍 有过滤条件 (${settings.rangeFilter.conditions.length}个)`);
                                 }
                             }
 
