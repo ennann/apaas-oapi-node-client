@@ -12,7 +12,8 @@
         "build": "rollup -c",
         "test": "jest",
         "test:manual": "tsx test/test.ts",
-        "dev": "ts-node src/index.ts",
+        "test:schema": "tsx test/test.schema.ts",
+        "dev": "tsx src/index.ts",
         "release": "npm run build && npm version patch && git push origin main --follow-tags"
     },
     "keywords": [],
@@ -33,7 +34,7 @@
         "rollup": "^4.44.1",
         "rollup-plugin-typescript2": "^0.36.0",
         "ts-jest": "^29.4.0",
-        "ts-node": "^10.9.2",
+        "tsx": "^4.21.0",
         "typescript": "^5.8.3"
     },
     "description": ""

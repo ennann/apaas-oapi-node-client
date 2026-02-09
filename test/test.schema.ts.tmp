@@ -1,0 +1,256 @@
+import { apaas } from '../src/index';
+
+/**
+ * 辅助函数：列出所有对象
+ */
+async function listAllObjects(client: any, stepName: string) {
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`📋 ${stepName}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+    const objects = await client.object.listWithIterator();
+    
+    console.log(`[Info] 数据库中的对象总数: ${objects.total}`);
+    
+    if (objects.items.length > 0) {
+        console.log(`[Info] 对象列表:\n`);
+        objects.items.forEach((obj: any, index: number) => {
+            const label = obj.label?.zh_CN || obj.label?.en_US || obj.apiName;
+            const createdAt = new Date(obj.createdAt).toLocaleString('zh-CN');
+            console.log(`  ${index + 1}. ${label}`);
+            console.log(`     API 名称: ${obj.apiName}`);
+            console.log(`     创建时间: ${createdAt}`);
+            console.log(`     字段数量: ${obj.fields?.length || 0}`);
+            console.log('');
+        });
+    } else {
+        console.log('[Warning] ⚠️ 当前数据库中没有任何对象！\n');
+    }
+    
+    return objects;
+}
+
+async function main() {
+    const TEST_OBJECT_NAME = 'object_sdk_test';
+    
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log('║     aPaaS Schema API 完整测试流程          ║');
+    console.log('╚════════════════════════════════════════════╝\n');
+
+    // 初始化客户端
+    const client = new apaas.Client({
+        clientId: 'c_a4dd955086ec45a882b9',
+        clientSecret: 'a62fc785b97a4847810a4f319ccbdb5e',
+        namespace: 'package_5dc5b7__c'
+    });
+
+    await client.init();
+    client.setLoggerLevel(3); // debug 级别
+
+    try {
+        // ============================================================
+        // Step 1: 列出初始状态
+        // ============================================================
+        const initialObjects = await listAllObjects(client, 'Step 1: 初始状态');
+        
+        // 检查测试对象是否已存在
+        const existingTest = initialObjects.items.find((obj: any) => obj.apiName === TEST_OBJECT_NAME);
+        if (existingTest) {
+            console.log(`[Warning] ⚠️ 测试对象 ${TEST_OBJECT_NAME} 已存在，先删除它...\n`);
+            
+            const deleteResult = await client.schema.delete({
+                api_names: [TEST_OBJECT_NAME]
+            });
+            
+            console.log(`[Delete] 预清理结果: code=${deleteResult.code}, msg=${deleteResult.msg}\n`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        // ============================================================
+        // Step 2: 创建新对象
+        // ============================================================
+        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`✨ Step 2: 创建数据对象`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+        console.log(`[Info] 创建对象: ${TEST_OBJECT_NAME}\n`);
+
+        const createResult = await client.schema.create({
+            objects: [{
+                api_name: TEST_OBJECT_NAME,
+                label: {
+                    zh_cn: 'SDK 测试对象',
+                    en_us: 'SDK Test Object'
+                },
+                settings: {
+                    allow_search_fields: ['_id', 'code', 'name'],
+                    display_name: 'name',
+                    search_layout: ['code', 'name']
+                },
+                fields: [
+                    {
+                        api_name: 'code',
+                        label: {
+                            zh_cn: '编码',
+                            en_us: 'Code'
+                        },
+                        type: {
+                            name: 'text',
+                            settings: {
+                                unique: true,
+                                required: true
+                            }
+                        },
+                        encrypt_type: null
+                    },
+                    {
+                        api_name: 'name',
+                        label: {
+                            zh_cn: '名称',
+                            en_us: 'Name'
+                        },
+                        type: {
+                            name: 'text',
+                            settings: {
+                                required: true
+                            }
+                        },
+                        encrypt_type: null
+                    }
+                ]
+            }]
+        });
+
+        console.log(`[Create] 结果: code=${createResult.code}, msg=${createResult.msg}`);
+        console.log(`[Create] 返回数据: ${JSON.stringify(createResult.data)}\n`);
+
+        // 等待 2 秒
+        console.log('[Info] 等待 2 秒，让系统同步数据...\n');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // 验证创建结果
+        const afterCreate = await listAllObjects(client, 'Step 2.1: 创建后验证');
+        const createdObject = afterCreate.items.find((obj: any) => obj.apiName === TEST_OBJECT_NAME);
+        
+        if (createdObject) {
+            console.log(`[Success] ✅ 对象创建成功！\n`);
+        } else {
+            console.log(`[Warning] ⚠️ 未找到创建的对象（可能需要更长时间同步）\n`);
+        }
+
+        // ============================================================
+        // Step 3: 更新对象
+        // ============================================================
+        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`🔄 Step 3: 更新数据对象`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+        console.log(`[Info] 更新对象标签和设置: ${TEST_OBJECT_NAME}\n`);
+
+        const updateResult = await client.schema.update({
+            objects: [{
+                api_name: TEST_OBJECT_NAME,
+                label: {
+                    zh_cn: 'SDK 测试对象【已更新】',
+                    en_us: 'SDK Test Object [Updated]'
+                },
+                settings: {
+                    allow_search_fields: ['_id', 'code', 'name'],
+                    display_name: 'code', // 改为用 code 作为展示名称
+                    search_layout: ['code', 'name']
+                }
+            }]
+        });
+
+        console.log(`[Update] 结果: code=${updateResult.code}, msg=${updateResult.msg}`);
+        console.log(`[Update] 返回数据: ${JSON.stringify(updateResult.data)}\n`);
+
+        // 等待 2 秒
+        console.log('[Info] 等待 2 秒，让系统同步数据...\n');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // 验证更新结果
+        const afterUpdate = await listAllObjects(client, 'Step 3.1: 更新后验证');
+        const updatedObject = afterUpdate.items.find((obj: any) => obj.apiName === TEST_OBJECT_NAME);
+        
+        if (updatedObject) {
+            const label = updatedObject.label?.zh_CN || updatedObject.label?.en_US;
+            if (label && label.includes('已更新')) {
+                console.log(`[Success] ✅ 对象更新成功！新标签: ${label}\n`);
+            } else {
+                console.log(`[Info] 对象存在，但标签可能未及时更新: ${label}\n`);
+            }
+        }
+
+        // ============================================================
+        // Step 4: 删除对象
+        // ============================================================
+        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`🗑️  Step 4: 删除数据对象`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+        console.log(`[Info] 删除对象: ${TEST_OBJECT_NAME}\n`);
+
+        const deleteResult = await client.schema.delete({
+            api_names: [TEST_OBJECT_NAME]
+        });
+
+        console.log(`[Delete] 结果: code=${deleteResult.code}, msg=${deleteResult.msg}`);
+        console.log(`[Delete] 返回数据: ${JSON.stringify(deleteResult.data)}\n`);
+
+        // 等待 2 秒
+        console.log('[Info] 等待 2 秒，让系统同步数据...\n');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // 验证删除结果
+        const afterDelete = await listAllObjects(client, 'Step 4.1: 删除后验证');
+        const deletedObject = afterDelete.items.find((obj: any) => obj.apiName === TEST_OBJECT_NAME);
+        
+        if (!deletedObject) {
+            console.log(`[Success] ✅ 对象删除成功！\n`);
+        } else {
+            console.log(`[Warning] ⚠️ 对象仍然存在（可能需要更长时间同步）\n`);
+        }
+
+        // ============================================================
+        // 总结
+        // ============================================================
+        console.log(`\n╔════════════════════════════════════════════╗`);
+        console.log(`║              测试完成汇总                  ║`);
+        console.log(`╚════════════════════════════════════════════╝\n`);
+
+        console.log(`📊 测试对象: ${TEST_OBJECT_NAME}`);
+        console.log(`✅ 创建接口: code=${createResult.code}`);
+        console.log(`✅ 更新接口: code=${updateResult.code}`);
+        console.log(`✅ 删除接口: code=${deleteResult.code}`);
+        console.log(`\n[Info] 初始对象数: ${initialObjects.total}`);
+        console.log(`[Info] 最终对象数: ${afterDelete.total}`);
+        
+        if (initialObjects.total === afterDelete.total) {
+            console.log(`\n[Success] ✅✅✅ 所有接口调用成功，数据库状态已恢复！\n`);
+        } else {
+            console.log(`\n[Info] 对象数量有变化，请手动检查数据库状态\n`);
+        }
+
+    } catch (error: any) {
+        console.error('\n❌ 测试失败！');
+        console.error('[Error]', error.message);
+        
+        if (error.response) {
+            console.error('[Error Response]', JSON.stringify(error.response.data, null, 2));
+        }
+        
+        throw error;
+    }
+}
+
+// 执行测试
+main()
+    .then(() => {
+        console.log('✨ 测试流程执行完毕\n');
+        process.exit(0);
+    })
+    .catch((error) => {
+        console.error('💥 测试流程异常:', error.message);
+        process.exit(1);
+    });

@@ -2,6 +2,18 @@ import dayjs from 'dayjs';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { LoggerLevel } from './logger';
 import { functionLimiter } from './limiter';
+import {
+    FIELD_TYPES,
+    SYSTEM_FIELDS,
+    LANGUAGE_CODES,
+    getSystemFields,
+    getCustomFieldTypes,
+    getFieldType,
+    isSystemField,
+    createMultilingualText,
+    extractMultilingualText,
+    type FieldTypeMetadata
+} from './field-types';
 
 /**
  * 批量操作结果
@@ -2410,10 +2422,191 @@ class Client {
             }
         }
     };
+
+    /**
+     * 数据对象结构管理模块（Schema）
+     */
+    public schema = {
+        /**
+         * 批量创建数据对象（表）
+         * @description 批量创建一个或多个数据对象
+         * @param params 请求参数 { objects: Array }
+         * @returns 接口返回结果
+         */
+        create: async (params: {
+            objects: Array<{
+                api_name: string;
+                label: {
+                    zh_cn: string;
+                    en_us: string;
+                };
+                settings?: {
+                    allow_search_fields?: string[];
+                    display_name?: string;
+                    search_layout?: string[];
+                };
+                fields: Array<{
+                    api_name: string;
+                    label: {
+                        zh_cn: string;
+                        en_us: string;
+                    };
+                    type: {
+                        name: string;
+                        settings?: any;
+                    };
+                    encrypt_type?: string | null;
+                }>;
+            }>;
+        }): Promise<any> => {
+            const { objects } = params;
+            await this.ensureTokenValid();
+
+            const url = `/v1/namespaces/${this.namespace}/objects/batch_create`;
+
+            this.log(LoggerLevel.info, `[schema.create] Creating ${objects.length} object(s)`);
+            this.log(LoggerLevel.trace, `[schema.create] Request URL: ${this.axiosInstance.defaults.baseURL}${url}`);
+            this.log(LoggerLevel.trace, `[schema.create] Request Body: ${JSON.stringify({ objects }, null, 2)}`);
+
+            const res = await this.axiosInstance.post(
+                url,
+                { objects },
+                {
+                    headers: {
+                        Authorization: `${this.accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            this.log(LoggerLevel.debug, `[schema.create] Objects created: code=${res.data.code}`);
+            this.log(LoggerLevel.trace, `[schema.create] Response: ${JSON.stringify(res.data)}`);
+
+            return res.data;
+        },
+
+        /**
+         * 批量更新数据对象（表）
+         * @description 批量更新一个或多个数据对象的配置
+         * @param params 请求参数 { objects: Array }
+         * @returns 接口返回结果
+         */
+        update: async (params: {
+            objects: Array<{
+                api_name: string;
+                label?: {
+                    zh_cn: string;
+                    en_us: string;
+                };
+                settings?: {
+                    allow_search_fields?: string[];
+                    display_name?: string;
+                    search_layout?: string[];
+                };
+                fields?: Array<{
+                    api_name: string;
+                    label?: {
+                        zh_cn: string;
+                        en_us: string;
+                    };
+                    type?: {
+                        name: string;
+                        settings?: any;
+                    };
+                    encrypt_type?: string | null;
+                    operator?: any;
+                }>;
+            }>;
+        }): Promise<any> => {
+            const { objects } = params;
+            await this.ensureTokenValid();
+
+            const url = `/v1/namespaces/${this.namespace}/objects/batch_update`;
+
+            this.log(LoggerLevel.info, `[schema.update] Updating ${objects.length} object(s)`);
+            this.log(LoggerLevel.trace, `[schema.update] Request URL: ${this.axiosInstance.defaults.baseURL}${url}`);
+            this.log(LoggerLevel.trace, `[schema.update] Request Body: ${JSON.stringify({ objects }, null, 2)}`);
+
+            const res = await this.axiosInstance.post(
+                url,
+                { objects },
+                {
+                    headers: {
+                        Authorization: `${this.accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            this.log(LoggerLevel.debug, `[schema.update] Objects updated: code=${res.data.code}`);
+            this.log(LoggerLevel.trace, `[schema.update] Response: ${JSON.stringify(res.data)}`);
+
+            return res.data;
+        },
+
+        /**
+         * 批量删除数据对象（表）
+         * @description 批量删除一个或多个数据对象
+         * @param params 请求参数 { api_names: string[] }
+         * @returns 接口返回结果
+         * @example
+         * ```typescript
+         * // 删除单个对象
+         * await client.schema.delete({ api_names: ['object_abc'] });
+         * 
+         * // 删除多个对象
+         * await client.schema.delete({ api_names: ['object_abc', 'object_def'] });
+         * ```
+         */
+        delete: async (params: { api_names: string[] }): Promise<any> => {
+            const { api_names } = params;
+            await this.ensureTokenValid();
+
+            const url = `/v1/namespaces/${this.namespace}/objects/batch_delete`;
+
+            this.log(LoggerLevel.info, `[schema.delete] Deleting ${api_names.length} object(s): ${api_names.join(', ')}`);
+
+            // 直接传递字符串数组
+            const requestBody = {
+                api_names
+            };
+
+            this.log(LoggerLevel.trace, `[schema.delete] Request URL: ${this.axiosInstance.defaults.baseURL}${url}`);
+            this.log(LoggerLevel.trace, `[schema.delete] Request Body: ${JSON.stringify(requestBody, null, 2)}`);
+
+            const res = await this.axiosInstance.post(
+                url,
+                requestBody,
+                {
+                    headers: {
+                        Authorization: `${this.accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            this.log(LoggerLevel.debug, `[schema.delete] Objects deleted: code=${res.data.code}`);
+            this.log(LoggerLevel.trace, `[schema.delete] Response: ${JSON.stringify(res.data)}`);
+
+            return res.data;
+        }
+    };
 }
 
 export const apaas = {
     Client
 };
 
-export type { BatchResult, RetryOptions };
+export type { BatchResult, RetryOptions, FieldTypeMetadata };
+
+export {
+    FIELD_TYPES,
+    SYSTEM_FIELDS,
+    LANGUAGE_CODES,
+    getSystemFields,
+    getCustomFieldTypes,
+    getFieldType,
+    isSystemField,
+    createMultilingualText,
+    extractMultilingualText
+};
