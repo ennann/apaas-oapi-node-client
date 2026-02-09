@@ -2490,6 +2490,45 @@ class Client {
          * @description 批量更新一个或多个数据对象的配置
          * @param params 请求参数 { objects: Array }
          * @returns 接口返回结果
+         * @example
+         * ```typescript
+         * // 添加新字段
+         * await client.schema.update({
+         *   objects: [{
+         *     api_name: 'my_object',
+         *     fields: [{
+         *       operator: 'add',
+         *       api_name: 'new_field',
+         *       label: { zh_cn: '新字段', en_us: 'New Field' },
+         *       type: { name: 'text', settings: { required: false } },
+         *       encrypt_type: 'none'
+         *     }]
+         *   }]
+         * });
+         * 
+         * // 修改现有字段
+         * await client.schema.update({
+         *   objects: [{
+         *     api_name: 'my_object',
+         *     fields: [{
+         *       operator: 'replace',
+         *       api_name: 'existing_field',
+         *       label: { zh_cn: '新标签', en_us: 'New Label' }
+         *     }]
+         *   }]
+         * });
+         * 
+         * // 删除字段
+         * await client.schema.update({
+         *   objects: [{
+         *     api_name: 'my_object',
+         *     fields: [{
+         *       operator: 'remove',
+         *       api_name: 'field_to_delete'
+         *     }]
+         *   }]
+         * });
+         * ```
          */
         update: async (params: {
             objects: Array<{
@@ -2504,17 +2543,22 @@ class Client {
                     search_layout?: string[];
                 };
                 fields?: Array<{
+                    /** 操作类型：add=添加字段, replace=修改字段, remove=删除字段 */
+                    operator: 'add' | 'replace' | 'remove';
+                    /** 字段 API 名称 */
                     api_name: string;
+                    /** 字段标签（可选，operator=add 和 replace 时使用） */
                     label?: {
                         zh_cn: string;
                         en_us: string;
                     };
+                    /** 字段类型（可选，operator=add 和 replace 时使用） */
                     type?: {
                         name: string;
                         settings?: any;
                     };
+                    /** 加密类型（可选） */
                     encrypt_type?: string | null;
-                    operator?: any;
                 }>;
             }>;
         }): Promise<any> => {

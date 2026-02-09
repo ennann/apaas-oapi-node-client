@@ -84,11 +84,30 @@ async function main() {
         
         await listAllObjects(client, 'Step 2.1: 创建后验证');
 
-        console.log(`🔄 Step 3: 更新对象\n`);
+        console.log(`🔄 Step 3: 更新对象（修改标签 + 添加新字段）\n`);
         const updateResult = await client.schema.update({
             objects: [{
                 api_name: TEST_OBJECT_NAME,
-                label: { zh_cn: 'SDK 测试对象【已更新】', en_us: 'SDK Test [Updated]' }
+                label: { zh_cn: 'SDK 测试对象【已更新】', en_us: 'SDK Test [Updated]' },
+                fields: [
+                    // 添加新字段
+                    {
+                        operator: 'add',
+                        api_name: 'description',
+                        label: { zh_cn: '描述', en_us: 'Description' },
+                        type: { 
+                            name: 'text', 
+                            settings: { 
+                                required: false,
+                                unique: false,
+                                case_sensitive: false,
+                                multiline: true,
+                                max_length: 500
+                            }
+                        },
+                        encrypt_type: 'none'
+                    }
+                ]
             }]
         });
         console.log(`[Update] code=${updateResult.code}, msg=${updateResult.msg}\n`);
