@@ -94,3 +94,4 @@ await client.schema.update({
 
 - 完整说明、初始化示例与 API 用法请查看 [UserManual.md](./UserManual.md)
 - Schema 管理完整示例请查看 [examples/schema-operations.ts](./examples/schema-operations.ts)
+- **关联字段创建示例**（lookup/lookup_multi/referenceField/rollup）请查看 [examples/schema-reference-fields.ts](./examples/schema-reference-fields.ts)

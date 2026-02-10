@@ -1,7 +1,383 @@
 /**
- * aPaaS 数据对象字段类型定义
- * 记录了平台支持的所有字段类型、存储格式和示例
+ * aPaaS 数据对象 Schema 管理完整规范
+ * 
+ * 本文档包含：
+ * 1. Schema 接口规范（创建、更新对象）
+ * 2. 字段类型完整定义（20+ 字段类型）
+ * 3. 系统字段说明（6 个自动创建字段）
+ * 4. 最佳实践和注意事项
  */
+
+// ============================================================
+// Schema 接口规范
+// ============================================================
+
+/**
+ * 多语文本结构
+ */
+export interface MultilingualText {
+    zh_cn: string;
+    en_us: string;
+}
+
+/**
+ * 对象设置
+ */
+export interface ObjectSettings {
+    /** 可搜索字段列表 - 注意：不要包含 _name，会报错 */
+    allow_search_fields?: string[];
+    /** 展示名称字段 - 注意：不要使用 _name，应使用自定义字段 */
+    display_name?: string;
+    /** 搜索布局字段列表 */
+    search_layout?: string[];
+}
+
+/**
+ * 字段类型定义
+ */
+export interface FieldTypeDefinition {
+    /** 字段类型名称 */
+    name: string;
+    /** 字段类型设置（根据不同类型有不同的结构） */
+    settings?: any;
+}
+
+/**
+ * 加密类型枚举
+ */
+export type EncryptType = 'none' | 'rand' | 'fix' | 'ope';
+
+/**
+ * 字段操作类型（用于 update 接口）
+ */
+export type FieldOperator = 'add' | 'replace' | 'remove';
+
+/**
+ * 创建对象时的字段定义
+ */
+export interface CreateFieldDefinition {
+    /** 字段 API 名称（必填） */
+    api_name: string;
+    /** 字段标签（必填） */
+    label: MultilingualText;
+    /** 字段类型（必填） */
+    type: FieldTypeDefinition;
+    /** 加密类型（建议显式指定，默认 'none'） */
+    encrypt_type?: EncryptType | null;
+}
+
+/**
+ * 更新对象时的字段定义
+ */
+export interface UpdateFieldDefinition {
+    /** 操作类型（必填）：add=添加字段, replace=修改字段, remove=删除字段 */
+    operator: FieldOperator;
+    /** 字段 API 名称（必填） */
+    api_name: string;
+    /** 字段标签（operator=add/replace 时需要） */
+    label?: MultilingualText;
+    /** 字段类型（operator=add/replace 时需要） */
+    type?: FieldTypeDefinition;
+    /** 加密类型（可选） */
+    encrypt_type?: EncryptType | null;
+}
+
+/**
+ * 创建对象的定义
+ */
+export interface CreateObjectDefinition {
+    /** 对象 API 名称（必填） */
+    api_name: string;
+    /** 对象标签（必填） */
+    label: MultilingualText;
+    /** 对象设置（可选） */
+    settings?: ObjectSettings;
+    /** 字段列表（必填，至少包含一个自定义字段） */
+    fields: CreateFieldDefinition[];
+}
+
+/**
+ * 更新对象的定义
+ */
+export interface UpdateObjectDefinition {
+    /** 对象 API 名称（必填） */
+    api_name: string;
+    /** 对象标签（可选，不传则不修改） */
+    label?: MultilingualText;
+    /** 对象设置（可选，不传则不修改） */
+    settings?: ObjectSettings;
+    /** 字段列表（可选，不传则不修改字段） */
+    fields?: UpdateFieldDefinition[];
+}
+
+/**
+ * Schema 接口最佳实践和限制说明
+ */
+export const SCHEMA_GUIDELINES = {
+    /** 批量操作限制 */
+    limits: {
+        batch_size: 10, // 单次请求最多 10 个对象
+    },
+    
+    /** 系统字段说明 */
+    system_fields: {
+        description: '系统字段会自动创建，不需要在 fields 数组中定义',
+        fields: ['_id', '_name', '_createdBy', '_createdAt', '_updatedBy', '_updatedAt'],
+    },
+    
+    /** display_name 限制 */
+    display_name: {
+        restriction: '不能使用 _name 作为 display_name',
+        reason: '系统会误认为是包含 NOW/TODAY 函数的公式',
+        solution: '使用自定义字段（如 code、name 等）',
+        example: 'display_name: "code"',
+    },
+    
+    /** allow_search_fields 限制 */
+    allow_search_fields: {
+        restriction: '不能包含 _name 字段',
+        reason: '系统不允许在可搜索字段中使用包含公式的字段',
+        solution: '只包含 _id 和其他自定义字段',
+        example: 'allow_search_fields: ["_id", "code", "name"]',
+    },
+    
+    /** encrypt_type 说明 */
+    encrypt_type: {
+        required: true,
+        description: '建议每个字段都显式指定 encrypt_type',
+        options: {
+            none: '不加密（默认）',
+            rand: '非确定性加密',
+            fix: '固定加密',
+            ope: '保序加密',
+        },
+    },
+    
+    /** operator 说明（用于 update） */
+    operator: {
+        required: true,
+        description: '更新字段时必须指定操作类型',
+        options: {
+            add: { description: '添加新字段', required_fields: ['api_name', 'label', 'type'] },
+            replace: { description: '修改现有字段', required_fields: ['api_name'], note: '只传需要修改的属性' },
+            remove: { description: '删除字段', required_fields: ['api_name'], note: '只需要 api_name' },
+        },
+    },
+    
+    /** 关联字段说明 */
+    reference_fields: {
+        description: '关联字段用于在对象之间建立关联关系',
+        types: {
+            lookup: {
+                description: '关联对象（单值）- 关联另一个对象的单条记录',
+                settings: {
+                    objectAPIName: '目标对象的 API 名称（必填）',
+                    required: '是否必填（可选）',
+                    displayStyle: '显示样式（可选）'
+                },
+                example: 'type: { name: "lookup", settings: { objectAPIName: "supplier" } }',
+                write_format: '写入时只需要 _id：{ supplier: { _id: 123456 } }'
+            },
+            lookup_multi: {
+                description: '关联对象（多值）- 关联另一个对象的多条记录',
+                settings: {
+                    objectAPIName: '目标对象的 API 名称（必填）',
+                    multiple: 'true（多选）'
+                },
+                limit: '最多可以关联 200 条记录',
+                example: 'type: { name: "lookup_multi", settings: { objectAPIName: "category", multiple: true } }',
+                write_format: '写入时提供多个 _id：{ categories: [{ _id: 111 }, { _id: 222 }] }'
+            },
+            referenceField: {
+                description: '引用字段 - 引用关联对象中的字段值（系统自动维护，不可直接写入）',
+                settings: {
+                    guideFieldAPIName: '引导字段（lookup 字段）',
+                    fieldAPIName: '引用的目标字段',
+                    referenceObjectApiName: '引用的对象'
+                },
+                example: 'type: { name: "referenceField", settings: { guideFieldAPIName: "supplier", fieldAPIName: "name", referenceObjectApiName: "supplier" } }',
+                note: '系统根据 lookup 字段自动计算，不能直接写入数据'
+            },
+            rollup: {
+                description: '汇总字段 - 对关联对象的数据进行聚合计算（系统自动维护，不可直接写入）',
+                settings: {
+                    objectAPIName: '被汇总的对象',
+                    lookupFieldAPIName: '关联字段（当前对象中的 lookup 字段）',
+                    fieldAPIName: '要汇总的字段',
+                    functionType: '汇总函数：sum/avg/count/max/min/countDistinct',
+                    rangeFilter: '过滤条件（可选）'
+                },
+                example: 'type: { name: "rollup", settings: { objectAPIName: "order_item", lookupFieldAPIName: "order", fieldAPIName: "amount", functionType: "sum" } }',
+                note: '系统根据关联数据自动汇总，不能直接写入数据'
+            }
+        },
+        prerequisites: {
+            description: '创建关联字段的前置条件',
+            rules: [
+                '目标对象必须已存在',
+                'objectAPIName 必须准确（区分大小写）',
+                'referenceField 和 rollup 依赖的 lookup 字段必须先创建',
+                '删除 lookup 字段前，需要先删除依赖它的 referenceField 和 rollup 字段'
+            ]
+        },
+        system_maintained: {
+            description: '系统自动维护的字段不能直接写入数据',
+            fields: ['referenceField', 'rollup', 'formula'],
+            reason: '这些字段的值由系统根据其他字段或公式自动计算'
+        }
+    },
+    
+    /** 响应结构说明 */
+    response: {
+        structure: '双层响应结构',
+        top_level: {
+            code: '0 表示请求格式正确',
+            msg: 'success',
+            data: '包含 items 数组',
+        },
+        item_level: {
+            description: '每个对象的实际创建/更新状态',
+            location: 'data.items[].status',
+            check: '需要检查 status.code 判断是否真正成功',
+        },
+    },
+} as const;
+
+/**
+ * 创建对象示例
+ */
+export const CREATE_OBJECT_EXAMPLE: CreateObjectDefinition = {
+    api_name: 'product',
+    label: {
+        zh_cn: '产品',
+        en_us: 'Product',
+    },
+    settings: {
+        display_name: 'code', // ✅ 使用自定义字段
+        allow_search_fields: ['_id', 'code', 'name'], // ✅ 不包含 _name
+        search_layout: ['code', 'name'],
+    },
+    fields: [
+        {
+            api_name: 'code',
+            label: { zh_cn: '产品编号', en_us: 'Product Code' },
+            type: {
+                name: 'text',
+                settings: {
+                    required: true,
+                    unique: true,
+                    case_sensitive: false,
+                    multiline: false,
+                    max_length: 50,
+                },
+            },
+            encrypt_type: 'none', // ✅ 显式指定
+        },
+        {
+            api_name: 'name',
+            label: { zh_cn: '产品名称', en_us: 'Product Name' },
+            type: {
+                name: 'text',
+                settings: {
+                    required: true,
+                    unique: false,
+                    case_sensitive: false,
+                    multiline: false,
+                    max_length: 200,
+                },
+            },
+            encrypt_type: 'none',
+        },
+        {
+            api_name: 'price',
+            label: { zh_cn: '价格', en_us: 'Price' },
+            type: {
+                name: 'decimal',
+                settings: {
+                    required: true,
+                    unique: false,
+                    display_as_percentage: false,
+                    decimal_places: 2,
+                },
+            },
+            encrypt_type: 'none',
+        },
+    ],
+};
+
+/**
+ * 更新对象示例（添加字段）
+ */
+export const UPDATE_OBJECT_ADD_FIELD_EXAMPLE: UpdateObjectDefinition = {
+    api_name: 'product',
+    fields: [
+        {
+            operator: 'add', // 添加新字段
+            api_name: 'description',
+            label: { zh_cn: '产品描述', en_us: 'Description' },
+            type: {
+                name: 'text',
+                settings: {
+                    required: false,
+                    unique: false,
+                    case_sensitive: false,
+                    multiline: true,
+                    max_length: 1000,
+                },
+            },
+            encrypt_type: 'none',
+        },
+    ],
+};
+
+/**
+ * 更新对象示例（修改字段）
+ */
+export const UPDATE_OBJECT_REPLACE_FIELD_EXAMPLE: UpdateObjectDefinition = {
+    api_name: 'product',
+    fields: [
+        {
+            operator: 'replace', // 修改现有字段
+            api_name: 'price',
+            label: { zh_cn: '销售价格', en_us: 'Sale Price' }, // 修改标签
+            // 可以只传需要修改的属性
+        },
+    ],
+};
+
+/**
+ * 更新对象示例（删除字段）
+ */
+export const UPDATE_OBJECT_REMOVE_FIELD_EXAMPLE: UpdateObjectDefinition = {
+    api_name: 'product',
+    fields: [
+        {
+            operator: 'remove', // 删除字段
+            api_name: 'description', // 只需要 api_name
+        },
+    ],
+};
+
+/**
+ * 更新对象示例（只修改标签和设置）
+ */
+export const UPDATE_OBJECT_SETTINGS_EXAMPLE: UpdateObjectDefinition = {
+    api_name: 'product',
+    label: {
+        zh_cn: '产品信息', // 修改标签
+        en_us: 'Product Information',
+    },
+    settings: {
+        display_name: 'name', // 修改展示名称字段
+        allow_search_fields: ['_id', 'code', 'name', 'description'],
+        search_layout: ['code', 'name', 'description'],
+    },
+    // 不传 fields，表示不修改字段
+};
+
+// ============================================================
+// 字段类型定义
+// ============================================================
 
 /**
  * 字段类型元数据接口

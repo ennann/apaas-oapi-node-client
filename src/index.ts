@@ -6,13 +6,28 @@ import {
     FIELD_TYPES,
     SYSTEM_FIELDS,
     LANGUAGE_CODES,
+    SCHEMA_GUIDELINES,
+    CREATE_OBJECT_EXAMPLE,
+    UPDATE_OBJECT_ADD_FIELD_EXAMPLE,
+    UPDATE_OBJECT_REPLACE_FIELD_EXAMPLE,
+    UPDATE_OBJECT_REMOVE_FIELD_EXAMPLE,
+    UPDATE_OBJECT_SETTINGS_EXAMPLE,
     getSystemFields,
     getCustomFieldTypes,
     getFieldType,
     isSystemField,
     createMultilingualText,
     extractMultilingualText,
-    type FieldTypeMetadata
+    type FieldTypeMetadata,
+    type MultilingualText,
+    type ObjectSettings,
+    type FieldTypeDefinition,
+    type EncryptType,
+    type FieldOperator,
+    type CreateFieldDefinition,
+    type UpdateFieldDefinition,
+    type CreateObjectDefinition,
+    type UpdateObjectDefinition
 } from './field-types';
 
 /**
@@ -2641,12 +2656,35 @@ export const apaas = {
     Client
 };
 
-export type { BatchResult, RetryOptions, FieldTypeMetadata };
+export type { 
+    BatchResult, 
+    RetryOptions, 
+    FieldTypeMetadata,
+    // Schema operation types
+    MultilingualText,
+    ObjectSettings,
+    FieldTypeDefinition,
+    EncryptType,
+    FieldOperator,
+    CreateFieldDefinition,
+    UpdateFieldDefinition,
+    CreateObjectDefinition,
+    UpdateObjectDefinition
+};
 
 export {
+    // Field type definitions and metadata
     FIELD_TYPES,
     SYSTEM_FIELDS,
     LANGUAGE_CODES,
+    // Schema guidelines and examples
+    SCHEMA_GUIDELINES,
+    CREATE_OBJECT_EXAMPLE,
+    UPDATE_OBJECT_ADD_FIELD_EXAMPLE,
+    UPDATE_OBJECT_REPLACE_FIELD_EXAMPLE,
+    UPDATE_OBJECT_REMOVE_FIELD_EXAMPLE,
+    UPDATE_OBJECT_SETTINGS_EXAMPLE,
+    // Helper functions
     getSystemFields,
     getCustomFieldTypes,
     getFieldType,

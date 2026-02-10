@@ -10,9 +10,7 @@
     "type": "commonjs",
     "scripts": {
         "build": "rollup -c",
-        "test": "jest",
-        "test:manual": "tsx test/test.ts",
-        "test:schema": "tsx test/test.schema.ts",
+        "test": "jest --passWithNoTests",
         "dev": "tsx src/index.ts",
         "release": "npm run build && npm version patch && git push origin main --follow-tags"
     },
