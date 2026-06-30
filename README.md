@@ -51,7 +51,13 @@ mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
 cp -R skills/apaas-* "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
-从 npm 包所在项目安装：
+通过 npx 从 npm 直接安装：
+
+```bash
+npx apaas-oapi-client install-skills
+```
+
+从已安装 npm 包的项目安装：
 
 ```bash
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"

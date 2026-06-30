@@ -1,7 +1,10 @@
 {
     "name": "apaas-oapi-client",
-    "version": "0.1.38",
+    "version": "0.1.39",
     "main": "dist/index.js",
+    "bin": {
+        "apaas-oapi-client": "./bin/apaas-oapi-client.js"
+    },
     "exports": {
         ".": "./dist/index.js",
         "./node-sdk": "./dist/index.js"
