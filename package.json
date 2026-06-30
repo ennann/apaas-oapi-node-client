@@ -14,7 +14,14 @@
         "dev": "tsx src/index.ts",
         "release": "npm run build && npm version patch && git push origin main --follow-tags"
     },
-    "keywords": [],
+    "keywords": [
+        "apaas",
+        "openapi",
+        "nodejs",
+        "sdk",
+        "ai-agent",
+        "codex-skill"
+    ],
     "author": "",
     "license": "ISC",
     "dependencies": {
@@ -35,5 +42,5 @@
         "tsx": "^4.21.0",
         "typescript": "^5.8.3"
     },
-    "description": ""
+    "description": "aPaaS OpenAPI Node.js 客户端 SDK，内置 AI Agent 友好的模块化 Skills 与 Schema 辅助规则。"
 }

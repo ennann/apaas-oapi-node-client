@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Function Flow"
+  short_description: "aPaaS 云函数调用和自动化流程执行安全操作指南"
+  default_prompt: "Use $apaas-function-flow to invoke cloud functions or automation flows."

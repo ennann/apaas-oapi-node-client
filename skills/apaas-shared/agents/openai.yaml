@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Shared"
+  short_description: "aPaaS SDK 认证、凭证、安全与通用调用规则指南"
+  default_prompt: "Use $apaas-shared to initialize aPaaS SDK access safely."

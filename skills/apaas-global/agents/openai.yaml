@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Global"
+  short_description: "aPaaS 全局选项和环境变量读取审计安全操作指南"
+  default_prompt: "Use $apaas-global to inspect global options and variables with the aPaaS Node SDK."

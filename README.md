@@ -30,6 +30,42 @@
 
 ---
 
+## 🤖 **AI Agent / Skills**
+
+本仓库内置面向 AI Agent 的模块化 Skills，路径为 [skills](./skills)。设计采用 `shared + domain skill + references` 的轻量结构：主 `SKILL.md` 负责路由和安全边界，复杂规则放到 `references/` 按需读取。
+
+| Skill | 适用场景 |
+| --- | --- |
+| `apaas-shared` | Client 初始化、凭证安全、namespace、token、日志、分页与错误处理 |
+| `apaas-object` | 对象列表、字段元数据、记录查询/创建/更新/删除、Markdown 导出 |
+| `apaas-schema` | 对象和字段结构管理、字段类型映射、lookup/reference 依赖规则 |
+| `apaas-function-flow` | 云函数调用、自动化流程 v1/v2 执行 |
+| `apaas-builder` | 页面列表、页面详情、页面访问链接 |
+| `apaas-global` | 全局选项、环境变量读取与审计 |
+| `apaas-exchange-attachment` | 用户/部门 ID 交换、附件和头像上传下载 |
+
+从仓库根目录安装到 Codex Skill 目录：
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/apaas-* "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+从 npm 包所在项目安装：
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R node_modules/apaas-oapi-client/skills/apaas-* "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+使用建议：
+
+- 写入前先用 `apaas-object` 读取真实 metadata。
+- Schema 字段变更前先读 `apaas-schema/references/field-schema-rules.md`。
+- 删除、批量写入、流程执行都按写操作处理，先确认目标和影响。
+
+---
+
 ## 📦 **安装**
 
 ```bash
@@ -38,7 +74,7 @@ npm install apaas-oapi-client
 
 ---
 
-## � **快速开始**
+## 🚀 **快速开始**
 
 ### 创建数据对象
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Exchange Attachment"
+  short_description: "aPaaS 用户部门 ID 交换和附件处理操作指南"
+  default_prompt: "Use $apaas-exchange-attachment to exchange IDs or handle attachments with the aPaaS Node SDK."

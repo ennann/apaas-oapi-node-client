@@ -1,3 +1,11 @@
+node_modules/
+.env
+.env.*
+.DS_Store
+.vscode/
+.github/
+npm-debug.log
+*.tgz
 test/
 examples/
 init.sh

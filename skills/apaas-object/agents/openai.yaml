@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Object"
+  short_description: "aPaaS 对象元数据、记录读写与分页查询操作指南"
+  default_prompt: "Use $apaas-object to read metadata and operate records with the aPaaS Node SDK."

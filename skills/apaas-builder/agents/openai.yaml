@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Builder"
+  short_description: "aPaaS 页面元数据、详情和访问链接生成操作指南"
+  default_prompt: "Use $apaas-builder to inspect pages and generate page links with the aPaaS Node SDK."
