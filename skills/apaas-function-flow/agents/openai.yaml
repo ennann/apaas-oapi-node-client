@@ -1,4 +1,4 @@
 interface:
   display_name: "aPaaS Function Flow"
-  short_description: "aPaaS 云函数调用和自动化流程执行安全操作指南"
-  default_prompt: "Use $apaas-function-flow to invoke cloud functions or automation flows."
+  short_description: "aPaaS 云函数、自动化流程、工作流人工任务与飞书集成 token 指南"
+  default_prompt: "Use $apaas-function-flow to invoke functions, execute flows, handle workflow user tasks, or fetch Lark integration tokens."

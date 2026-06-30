@@ -96,12 +96,43 @@ export const OPTION_COLOR_LIST = [
 
 export type OptionColor = typeof OPTION_COLOR_LIST[number];
 
+export const OPTION_COLOR_CODE_BY_NAME: Record<OptionColor, string> = {
+    blue: 'B',
+    cyan: 'W',
+    green: 'G',
+    yellow: 'Y',
+    orange: 'O',
+    red: 'R',
+    magenta: 'V',
+    purple: 'P',
+    blueMagenta: 'I',
+    grey: 'N'
+} as const;
+
+export const OPTION_COLOR_NAME_BY_CODE = Object.fromEntries(
+    Object.entries(OPTION_COLOR_CODE_BY_NAME).map(([name, code]) => [code, name])
+) as Record<string, OptionColor>;
+
+export type OptionColorCode = typeof OPTION_COLOR_CODE_BY_NAME[OptionColor];
+
 export function getOptionColor(index: number): OptionColor {
     if (!Number.isInteger(index) || index < 0) {
         throw new Error('Option color index must be a non-negative integer.');
     }
 
     return OPTION_COLOR_LIST[index % OPTION_COLOR_LIST.length];
+}
+
+export function getOptionColorCode(color: OptionColor): OptionColorCode {
+    return OPTION_COLOR_CODE_BY_NAME[color] as OptionColorCode;
+}
+
+export function normalizeOptionColorForSchema(color: unknown): unknown {
+    if (typeof color !== 'string') {
+        return color;
+    }
+
+    return OPTION_COLOR_CODE_BY_NAME[color as OptionColor] || color;
 }
 
 export const OPTION_COLOR_RULES = {
@@ -124,6 +155,8 @@ export const OPTION_COLOR_RULES = {
         typeName: 'enum',
         optionsPath: 'type.settings.options',
         colorPath: 'type.settings.options[].color',
+        colorInput: 'SDK accepts metadata color names and normalizes them to OpenAPI color codes before writing.',
+        colorCodeByName: OPTION_COLOR_CODE_BY_NAME,
         sourcePath: 'type.settings.option_source',
         globalOptionPath: 'type.settings.global_option_api_name'
     }
@@ -210,7 +243,7 @@ export const FIELD_SCHEMA_RULES: FieldCreateRule[] = [
                 }
             ]
         },
-        notes: `Do not send create type as \`option\`. Metadata returns optionList/optionSource/globalOptionAPIName; create/update expects options/option_source/global_option_api_name. Available option colors: ${OPTION_COLOR_LIST.join(', ')}.`
+        notes: `Do not send create type as \`option\`. Metadata returns optionList/optionSource/globalOptionAPIName; create/update expects options/option_source/global_option_api_name. The SDK accepts metadata color names and sends OpenAPI color codes (${Object.entries(OPTION_COLOR_CODE_BY_NAME).map(([name, code]) => `${name}=${code}`).join(', ')}).`
     },
     {
         metadataType: 'boolean',
@@ -358,6 +391,67 @@ export const SCHEMA_TYPE_MISMATCHES: Array<{
         metadataType: rule.metadataType,
         schemaType: rule.schemaType
     }));
+
+export interface SqlTypeMapping {
+    /** SQL type regex pattern, case-insensitive. */
+    sqlPattern: string;
+    /** Mapped aPaaS schema type. */
+    schemaType: SchemaFieldType;
+    /** Settings derivation rule. */
+    settingsMapping: string;
+}
+
+export const SQL_TYPE_TO_SCHEMA_TYPE: SqlTypeMapping[] = [
+    { sqlPattern: 'VARCHAR\\(\\d+\\)|CHAR\\(\\d+\\)', schemaType: 'text', settingsMapping: 'max_length from (n), multiline: false' },
+    { sqlPattern: 'TEXT|LONGTEXT|MEDIUMTEXT|TINYTEXT|CLOB', schemaType: 'text', settingsMapping: 'multiline: true, max_length: 100000' },
+    { sqlPattern: 'INT|INTEGER|BIGINT|SMALLINT|TINYINT(?!\\(1\\))|MEDIUMINT|SERIAL', schemaType: 'bigint', settingsMapping: 'required/unique from constraints' },
+    { sqlPattern: 'FLOAT|DOUBLE|REAL', schemaType: 'float', settingsMapping: 'decimal_places_number: 2' },
+    { sqlPattern: 'DECIMAL\\(\\d+,\\d+\\)|NUMERIC\\(\\d+,\\d+\\)', schemaType: 'decimal', settingsMapping: 'decimal_places from scale (s)' },
+    { sqlPattern: 'DATE', schemaType: 'date', settingsMapping: 'required from constraints' },
+    { sqlPattern: 'DATETIME|TIMESTAMP', schemaType: 'datetime', settingsMapping: 'required from constraints' },
+    { sqlPattern: 'BOOLEAN|BOOL|TINYINT\\(1\\)|BIT', schemaType: 'boolean', settingsMapping: 'default_value from DEFAULT' },
+    { sqlPattern: 'ENUM\\(.*\\)', schemaType: 'enum', settingsMapping: 'options from enum values, colors auto-assigned with getOptionColor(index)' },
+    { sqlPattern: 'BLOB|BINARY|VARBINARY|LONGBLOB|MEDIUMBLOB', schemaType: 'attachment', settingsMapping: 'any_type: true' },
+    { sqlPattern: 'JSON', schemaType: 'richText', settingsMapping: 'only when JSON stores rich text content' }
+];
+
+export interface ColumnNameSemanticRule {
+    /** Column name regex pattern, case-insensitive. */
+    columnPattern: string;
+    /** Inferred aPaaS schema type. */
+    schemaType: SchemaFieldType;
+    /** Inference notes. */
+    notes: string;
+}
+
+export const COLUMN_NAME_SEMANTIC_RULES: ColumnNameSemanticRule[] = [
+    { columnPattern: '(^|_)(e?mail)(s?$|_)', schemaType: 'email', notes: 'Column name contains email/mail' },
+    { columnPattern: '(^|_)(phone|mobile|tel)(s?$|_)', schemaType: 'phone', notes: 'Column name contains phone/mobile/tel' },
+    { columnPattern: '(^|_)(avatar|logo|profile_image)(s?$|_)', schemaType: 'avatar', notes: 'Column name contains avatar/logo' },
+    { columnPattern: '(^|_)(region|province|city|district|address)(s?$|_)', schemaType: 'region', notes: 'Column name implies geographic data' }
+];
+
+export interface SqlConstraintMapping {
+    /** SQL constraint. */
+    sqlConstraint: string;
+    /** Mapped aPaaS settings field. */
+    settingsField: string;
+    /** Mapped value. */
+    settingsValue: string;
+    /** Mapping notes. */
+    notes: string;
+}
+
+export const SQL_CONSTRAINT_TO_SETTINGS: SqlConstraintMapping[] = [
+    { sqlConstraint: 'NOT NULL', settingsField: 'required', settingsValue: 'true', notes: 'Maps to required: true' },
+    { sqlConstraint: 'UNIQUE', settingsField: 'unique', settingsValue: 'true', notes: 'Maps to unique: true' },
+    { sqlConstraint: 'PRIMARY KEY', settingsField: '-', settingsValue: '-', notes: 'Ignored: aPaaS uses system _id' },
+    { sqlConstraint: 'AUTO_INCREMENT', settingsField: '-', settingsValue: '-', notes: 'Ignored: aPaaS _id auto-increments. For business serial numbers, use auto_number' },
+    { sqlConstraint: 'FOREIGN KEY', settingsField: 'referenced_object_api_name', settingsValue: '(target table)', notes: 'Convert to lookup field' },
+    { sqlConstraint: 'DEFAULT', settingsField: 'default_value', settingsValue: '(value)', notes: 'Only boolean type supports default_value in aPaaS' },
+    { sqlConstraint: 'CHECK', settingsField: '-', settingsValue: '-', notes: 'Not supported in aPaaS, handle in application logic' },
+    { sqlConstraint: 'INDEX', settingsField: '-', settingsValue: '-', notes: 'Not applicable, aPaaS manages indexing automatically' }
+];
 
 export const BATCH_UPDATE_REQUIREMENTS = {
     add: 'Use operator=add with full field definition.',

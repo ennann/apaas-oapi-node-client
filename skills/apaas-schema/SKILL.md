@@ -17,25 +17,41 @@ Use this skill for `client.schema.*`.
 1. Use `apaas-shared` to initialize the client.
 2. Read current objects with `client.object.listWithIterator()`.
 3. Read existing fields with `client.object.metadata.fields({ object_name })`.
-4. For new objects, create shells first, then add fields with `schema.update`.
-5. For dependency fields, create base fields first, then lookup fields, then reference fields.
-6. Check request-level, silent-failure, and item-level response status.
-7. After the call, re-read metadata to verify the effective schema.
+4. Prefer `client.schema.createWithStages()` for new objects with fields.
+5. Use `client.schema.addFieldsIdempotent()` when adding fields to an existing object.
+6. Check raw schema write responses with `client.schema.checkResponse()`.
+7. After the call, use `client.schema.verifyObjects()` to verify the effective schema.
 
 ## Create Object
 
-Create objects as shells first. Do not rely on `schema.create({ fields })` to create fields.
+Create objects through the SDK staging helper when fields are involved. It creates shells first, then base fields, then lookup fields, then reference fields, then final settings.
 
 ```ts
-await client.schema.create({
+await client.schema.createWithStages({
   objects: [{
     api_name: "product",
     label: { zh_cn: "产品", en_us: "Product" },
     settings: {
-      display_name: "_id",
-      allow_search_fields: ["_id"],
+      display_name: "name",
+      allow_search_fields: ["_id", "name"],
       search_layout: []
-    }
+    },
+    fields: [{
+      operator: "add",
+      api_name: "name",
+      label: { zh_cn: "产品名称", en_us: "Name" },
+      type: {
+        name: "text",
+        settings: {
+          required: true,
+          unique: false,
+          case_sensitive: false,
+          multiline: false,
+          max_length: 100
+        }
+      },
+      encrypt_type: "none"
+    }]
   }]
 });
 ```
@@ -48,19 +64,23 @@ await client.schema.create({
 - Update label/settings without field changes by omitting `fields`.
 
 ```ts
-await client.schema.update({
-  objects: [{
-    api_name: "product",
-    fields: [{
-      operator: "add",
-      api_name: "description",
-      label: { zh_cn: "产品描述", en_us: "Description" },
-      type: {
-        name: "text",
-        settings: { multiline: true, max_length: 100000 }
-      },
-      encrypt_type: "none"
-    }]
+await client.schema.addFieldsIdempotent({
+  object_name: "product",
+  fields: [{
+    operator: "add",
+    api_name: "description",
+    label: { zh_cn: "产品描述", en_us: "Description" },
+    type: {
+      name: "text",
+      settings: {
+        required: false,
+        unique: false,
+        case_sensitive: false,
+        multiline: true,
+        max_length: 100000
+      }
+    },
+    encrypt_type: "none"
   }]
 });
 ```
@@ -70,3 +90,4 @@ await client.schema.update({
 - Confirm the object API names before `client.schema.delete`.
 - Do not delete objects as a cleanup shortcut if records or references may still depend on them.
 - Remove `reference_field` before removing its lookup field.
+- For environment rebuilds, use `client.schema.deleteAllCustomObjects({ confirm: true })`.

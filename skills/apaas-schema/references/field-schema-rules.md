@@ -104,9 +104,32 @@ blue, cyan, green, yellow, orange, red, magenta, purple, blueMagenta, grey, blue
 }
 ```
 
+OpenAPI write payloads require color short codes, while metadata returns color names. The SDK normalizes these names before writing, so SDK callers can keep using `blue`, `cyan`, etc.
+
+| Metadata color | OpenAPI write code |
+|---|---|
+| `blue` | `B` |
+| `cyan` | `W` |
+| `green` | `G` |
+| `yellow` | `Y` |
+| `orange` | `O` |
+| `red` | `R` |
+| `magenta` | `V` |
+| `purple` | `P` |
+| `blueMagenta` | `I` |
+| `grey` | `N` |
+
 Do not copy metadata `optionList` back into `schema.update`; convert it to `options`.
 
-Use `getOptionColor(index)` from the SDK to assign colors in this stable 10-color cycle.
+Use `getOptionColor(index)` from the SDK to assign metadata color names in this stable 10-color cycle. Use `getOptionColorCode(color)` only when constructing raw OpenAPI payloads outside the SDK normalizer.
+
+## SQL Conversion Constants
+
+For SQL/ER conversion, use the SDK exports instead of retyping mapping tables:
+
+- `SQL_TYPE_TO_SCHEMA_TYPE`
+- `COLUMN_NAME_SEMANTIC_RULES`
+- `SQL_CONSTRAINT_TO_SETTINGS`
 
 ## Minimal Lookup Example
 

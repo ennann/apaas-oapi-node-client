@@ -15,15 +15,18 @@
 - ✅ records 查询（支持分页迭代）
 - ✅ record 单条查询、单条更新、单条删除
 - ✅ record 批量创建、批量更新、批量删除
+- ✅ OQL、跨对象搜索、常量对象、数据集列表
 
 ### 对象结构管理（Schema）
 - ✅ **创建数据对象**（批量）
 - ✅ **更新数据对象**（批量，支持添加/修改/删除字段）
 - ✅ **删除数据对象**（批量）
+- ✅ **AI 友好的安全编排接口**（响应校验、幂等加字段、三阶段建对象、依赖顺序删除）
 - ✅ **字段类型完整文档**（20+ 字段类型，含示例）
 
 ### 其他功能
 - ✅ 获取 accessToken（自动刷新）
+- ✅ 工作流人工任务、异步流程状态、飞书集成 token
 - ✅ **导出数据对象文档为 Markdown**
 - ✅ 内置 Bottleneck 限流器
 - ✅ 自定义日志等级
@@ -36,10 +39,10 @@
 
 | Skill | 适用场景 |
 | --- | --- |
-| `apaas-shared` | Client 初始化、凭证安全、namespace、token、日志、分页与错误处理 |
-| `apaas-object` | 对象列表、字段元数据、记录查询/创建/更新/删除、Markdown 导出 |
+| `apaas-shared` | Client 初始化、凭证安全、namespace、token、日志、OpenAPI 覆盖、分页与错误码处理 |
+| `apaas-object` | 对象列表、字段元数据、记录查询/创建/更新/删除、OQL、跨对象搜索、常量对象、数据集 |
 | `apaas-schema` | 对象和字段结构管理、字段类型映射、lookup/reference 依赖规则 |
-| `apaas-function-flow` | 云函数调用、自动化流程 v1/v2 执行 |
+| `apaas-function-flow` | 云函数调用、自动化流程 v1/v2 执行、工作流人工任务、飞书集成 token |
 | `apaas-builder` | 页面列表、页面详情、页面访问链接 |
 | `apaas-global` | 全局选项、环境变量读取与审计 |
 | `apaas-exchange-attachment` | 用户/部门 ID 交换、附件和头像上传下载 |
@@ -85,6 +88,7 @@ cp -R node_modules/apaas-oapi-client/skills/apaas-* "${CODEX_HOME:-$HOME/.codex}
 使用建议：
 
 - 写入前先用 `apaas-object` 读取真实 metadata。
+- 大量读取优先使用 iterator 或 `apaas-object/references/id-cursor-pagination.md`。
 - Schema 字段变更前先读 `apaas-schema/references/field-schema-rules.md`。
 - 删除、批量写入、流程执行都按写操作处理，先确认目标和影响。
 
@@ -113,8 +117,8 @@ const client = new apaas.Client({
 
 await client.init();
 
-// 创建数据对象
-await client.schema.create({
+// 安全创建数据对象：空壳 -> 基础字段 -> lookup -> reference_field -> final settings
+await client.schema.createWithStages({
     objects: [{
         api_name: 'product',
         label: { zh_cn: '产品', en_us: 'Product' },
@@ -124,9 +128,19 @@ await client.schema.create({
         },
         fields: [
             {
+                operator: 'add',
                 api_name: 'code',
                 label: { zh_cn: '编号', en_us: 'Code' },
-                type: { name: 'text', settings: { required: true } },
+                type: {
+                    name: 'text',
+                    settings: {
+                        required: true,
+                        unique: false,
+                        case_sensitive: false,
+                        multiline: false,
+                        max_length: 100
+                    }
+                },
                 encrypt_type: 'none'
             }
         ]
@@ -141,11 +155,23 @@ await client.schema.update({
             operator: 'add',  // 添加新字段
             api_name: 'name',
             label: { zh_cn: '名称', en_us: 'Name' },
-            type: { name: 'text', settings: { required: true } },
+            type: {
+                name: 'text',
+                settings: {
+                    required: true,
+                    unique: false,
+                    case_sensitive: false,
+                    multiline: false,
+                    max_length: 100
+                }
+            },
             encrypt_type: 'none'
         }]
     }]
 });
+
+// 三层响应校验：请求级错误、data=null 静默失败、item 级失败
+client.schema.checkResponse({ code: '0', data: { items: [] } }, 'schema.update');
 ```
 
 ---

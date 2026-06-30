@@ -92,8 +92,8 @@ export interface CreateObjectDefinition {
     label: MultilingualText;
     /** 对象设置（可选） */
     settings?: ObjectSettings;
-    /** 字段列表（必填，至少包含一个自定义字段） */
-    fields: CreateFieldDefinition[];
+    /** 字段列表（可选）。schema.create 会忽略 fields，安全做法是先建空壳，再用 schema.update 添加字段。 */
+    fields?: CreateFieldDefinition[];
 }
 
 /**

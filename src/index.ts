@@ -32,16 +32,65 @@ import {
 import {
     SCHEMA_TYPE_BY_METADATA_TYPE,
     OPTION_COLOR_LIST,
+    OPTION_COLOR_CODE_BY_NAME,
+    OPTION_COLOR_NAME_BY_CODE,
     OPTION_COLOR_RULES,
     FIELD_SCHEMA_RULES,
     SCHEMA_TYPE_MISMATCHES,
+    SQL_TYPE_TO_SCHEMA_TYPE,
+    COLUMN_NAME_SEMANTIC_RULES,
+    SQL_CONSTRAINT_TO_SETTINGS,
     BATCH_UPDATE_REQUIREMENTS,
     getOptionColor,
+    getOptionColorCode,
+    normalizeOptionColorForSchema,
     type MetadataFieldType,
     type SchemaFieldType,
     type FieldCreateRule,
-    type OptionColor
+    type OptionColor,
+    type OptionColorCode,
+    type SqlTypeMapping,
+    type ColumnNameSemanticRule,
+    type SqlConstraintMapping
 } from './field-schema-rules';
+import {
+    SCHEMA_BATCH_SIZE,
+    addFieldsIdempotent,
+    batchExecute,
+    buildFieldRemovalPlan,
+    checkSchemaResponse,
+    createSchemaObjectShells,
+    createSchemaObjectsInStages,
+    deleteAllCustomObjects,
+    isSystemSchemaName,
+    normalizeSchemaObjectsForWrite,
+    splitSchemaFieldsByDependency,
+    validateSchemaResponse,
+    verifySchemaObjects,
+    type DeleteAllCustomObjectsOptions,
+    type DeleteAllCustomObjectsResult,
+    type SchemaAddFieldsOptions,
+    type SchemaAddFieldsResult,
+    type SchemaBatchExecuteOptions,
+    type SchemaBatchExecuteResult,
+    type SchemaBatchInfo,
+    type SchemaCreateObjectsInStagesOptions,
+    type SchemaCreateObjectsInStagesResult,
+    type SchemaCreateShellsOptions,
+    type SchemaCreateShellsResult,
+    type SchemaFieldRemovalPlan,
+    type SchemaManagedObjectDefinition,
+    type SchemaObjectVerification,
+    type SchemaResponse,
+    type SchemaResponseFailure,
+    type SchemaResponseFailureLayer,
+    type SchemaResponseItem,
+    type SchemaResponseValidationOptions,
+    type SchemaResponseValidationResult,
+    type SchemaStageFieldDefinition,
+    type SchemaVerificationOptions,
+    type SchemaVerificationResult
+} from './schema-utils';
 
 /**
  * 批量操作结果
@@ -322,6 +371,12 @@ class Client {
     get currentNamespace() {
         this.log(LoggerLevel.debug, `[namespace] Current namespace: ${this.namespace}`);
         return this.namespace;
+    }
+
+    private authHeaders(includeContentType = false) {
+        return includeContentType
+            ? { Authorization: `${this.accessToken}`, 'Content-Type': 'application/json' }
+            : { Authorization: `${this.accessToken}` };
     }
 
     /**
@@ -997,7 +1052,110 @@ class Client {
                     total: total,
                     msg: res.msg
                 };
+            },
+
+            /**
+             * 跨对象搜索记录
+             * @description 在最多 5 个对象中按搜索词查询记录
+             * @param params 请求体，包含 q、search_objects、page_token、page_size、metadata 等
+             */
+            recordsAcrossObjects: async (params: {
+                q: string;
+                search_objects: Array<{
+                    api_name: string;
+                    select?: string[];
+                    search_fields?: string[];
+                    filter?: any;
+                    order_by?: any[];
+                }>;
+                page_token?: string;
+                page_size?: number;
+                metadata?: 'Label' | 'SearchLayout' | string;
+            }): Promise<any> => {
+                await this.ensureTokenValid();
+
+                const url = `/v1/namespaces/${this.namespace}/objects/records/search`;
+
+                this.log(LoggerLevel.info, `[object.search.recordsAcrossObjects] Searching records: q=${params.q}`);
+
+                const res = await this.axiosInstance.post(url, params, {
+                    headers: this.authHeaders(true)
+                });
+
+                this.log(LoggerLevel.debug, `[object.search.recordsAcrossObjects] Records searched: code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[object.search.recordsAcrossObjects] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 跨对象搜索记录 - 自动 page_token 分页
+             */
+            recordsAcrossObjectsWithIterator: async (params: {
+                q: string;
+                search_objects: Array<{
+                    api_name: string;
+                    select?: string[];
+                    search_fields?: string[];
+                    filter?: any;
+                    order_by?: any[];
+                }>;
+                page_token?: string;
+                page_size?: number;
+                metadata?: 'Label' | 'SearchLayout' | string;
+            }): Promise<{ items: any[]; lastResponse: any }> => {
+                const pageSize = params.page_size || 20;
+                let pageToken = params.page_token || '';
+                let hasMore = true;
+                const items: any[] = [];
+                let lastResponse: any = null;
+
+                while (hasMore) {
+                    const res = await this.object.search.recordsAcrossObjects({
+                        ...params,
+                        page_size: pageSize,
+                        page_token: pageToken
+                    });
+
+                    if (res.code !== '0') {
+                        this.log(LoggerLevel.error, `[object.search.recordsAcrossObjectsWithIterator] Error searching records: code=${res.code}, msg=${res.msg}`);
+                        throw new Error(res.msg || `Search failed with code ${res.code}`);
+                    }
+
+                    const pageItems = res.data?.items || res.data?.records || res.data?.search_results || [];
+                    if (Array.isArray(pageItems)) {
+                        items.push(...pageItems);
+                    }
+
+                    lastResponse = res;
+                    const nextPageToken = res.data?.next_page_token || res.data?.page_token || '';
+                    hasMore = Boolean(res.data?.has_more && nextPageToken);
+                    pageToken = nextPageToken;
+                }
+
+                return { items, lastResponse };
             }
+        },
+
+        /**
+         * 执行 OQL
+         * @description 执行对象查询语言，支持匿名参数 args 和具名参数 namedArgs
+         */
+        oql: async (params: { query: string; args?: any[]; namedArgs?: Record<string, any> }): Promise<any> => {
+            await this.ensureTokenValid();
+
+            const url = `/api/data/v1/namespaces/${this.namespace}/records/query`;
+
+            this.log(LoggerLevel.info, '[object.oql] Executing OQL');
+
+            const res = await this.axiosInstance.post(url, params, {
+                headers: this.authHeaders(true)
+            });
+
+            this.log(LoggerLevel.debug, `[object.oql] OQL executed: code=${res.data.code}`);
+            this.log(LoggerLevel.trace, `[object.oql] Response: ${JSON.stringify(res.data)}`);
+
+            return res.data;
         },
 
         create: {
@@ -1475,6 +1633,108 @@ class Client {
     };
 
     /**
+     * 常量对象模块
+     */
+    public constant = {
+        /**
+         * 查询常量对象列表。object_name 可取 _currency、_country、_timeZone。
+         */
+        records: async (params: {
+            object_name: '_currency' | '_country' | '_timeZone' | string;
+            data?: {
+                limit?: number;
+                offset?: number;
+                count?: boolean;
+                fields?: string[] | string;
+                quickSearch?: string;
+                filter?: any[];
+                sort?: any[];
+            };
+        }): Promise<any> => {
+            const { object_name, data = {} } = params;
+            await this.ensureTokenValid();
+
+            const url = `/api/data/v1/namespaces/${this.namespace}/objects/${object_name}/records`;
+
+            this.log(LoggerLevel.info, `[constant.records] Fetching constant records: ${object_name}`);
+
+            const res = await this.axiosInstance.post(url, data, {
+                headers: this.authHeaders(true)
+            });
+
+            this.log(LoggerLevel.debug, `[constant.records] Constant records fetched: ${object_name}, code=${res.data.code}`);
+            this.log(LoggerLevel.trace, `[constant.records] Response: ${JSON.stringify(res.data)}`);
+
+            return res.data;
+        },
+
+        /**
+         * 查询常量对象单条记录详情。
+         */
+        record: async (params: { object_name: '_currency' | '_country' | '_timeZone' | string; record_id: string }): Promise<any> => {
+            const { object_name, record_id } = params;
+            await this.ensureTokenValid();
+
+            const url = `/api/data/v1/namespaces/${this.namespace}/objects/${object_name}/${record_id}`;
+
+            this.log(LoggerLevel.info, `[constant.record] Fetching constant record: ${object_name}.${record_id}`);
+
+            const res = await this.axiosInstance.get(url, {
+                headers: this.authHeaders()
+            });
+
+            this.log(LoggerLevel.debug, `[constant.record] Constant record fetched: ${object_name}.${record_id}, code=${res.data.code}`);
+            this.log(LoggerLevel.trace, `[constant.record] Response: ${JSON.stringify(res.data)}`);
+
+            return res.data;
+        },
+
+        metadata: {
+            /**
+             * 获取常量对象元数据。
+             */
+            fields: async (params: { object_name: '_currency' | '_country' | '_timeZone' | string }): Promise<any> => {
+                const { object_name } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/data/v1/namespaces/${this.namespace}/meta/objects/${object_name}`;
+
+                this.log(LoggerLevel.info, `[constant.metadata.fields] Fetching constant metadata: ${object_name}`);
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders()
+                });
+
+                this.log(LoggerLevel.debug, `[constant.metadata.fields] Constant metadata fetched: ${object_name}, code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[constant.metadata.fields] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 获取常量对象字段详情。
+             */
+            field: async (params: { object_name: '_currency' | '_country' | '_timeZone' | string; field_name: string }): Promise<any> => {
+                const { object_name, field_name } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/data/v1/namespaces/${this.namespace}/meta/objects/${object_name}/fields/${field_name}`;
+
+                this.log(LoggerLevel.info, `[constant.metadata.field] Fetching constant field metadata: ${object_name}.${field_name}`);
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders()
+                });
+
+                this.log(LoggerLevel.debug, `[constant.metadata.field] Constant field metadata fetched: ${object_name}.${field_name}, code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[constant.metadata.field] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            }
+        }
+    };
+
+    /**
      * 部门 ID 交换模块
      */
     public department = {
@@ -1784,6 +2044,95 @@ class Client {
             this.log(LoggerLevel.info, `[user.batchExchange] Completed: total=${result.total}, success=${result.successCount}, failed=${result.failedCount}`);
 
             return result;
+        }
+    };
+
+    /**
+     * 集成模块
+     */
+    public integration = {
+        lark: {
+            /**
+             * 获取默认飞书集成 tenantAccessToken。
+             */
+            defaultTenantAccessToken: async (): Promise<any> => {
+                await this.ensureTokenValid();
+
+                const url = `/api/integration/v1/namespaces/${this.namespace}/defaultLark/tenantAccessToken`;
+
+                this.log(LoggerLevel.info, '[integration.lark.defaultTenantAccessToken] Fetching default tenant token');
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders()
+                });
+
+                this.log(LoggerLevel.debug, `[integration.lark.defaultTenantAccessToken] Token fetched: code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[integration.lark.defaultTenantAccessToken] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 获取默认飞书集成 appAccessToken。
+             */
+            defaultAppAccessToken: async (): Promise<any> => {
+                await this.ensureTokenValid();
+
+                const url = `/api/integration/v1/namespaces/${this.namespace}/defaultLark/appAccessToken`;
+
+                this.log(LoggerLevel.info, '[integration.lark.defaultAppAccessToken] Fetching default app token');
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders()
+                });
+
+                this.log(LoggerLevel.debug, `[integration.lark.defaultAppAccessToken] Token fetched: code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[integration.lark.defaultAppAccessToken] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 获取自定义飞书集成 tenantAccessToken。
+             */
+            tenantAccessToken: async (params: { lark_integration_api_name: string }): Promise<any> => {
+                const { lark_integration_api_name } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/integration/v1/namespaces/${this.namespace}/lark/tenantAccessToken/${lark_integration_api_name}`;
+
+                this.log(LoggerLevel.info, `[integration.lark.tenantAccessToken] Fetching tenant token: ${lark_integration_api_name}`);
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders()
+                });
+
+                this.log(LoggerLevel.debug, `[integration.lark.tenantAccessToken] Token fetched: ${lark_integration_api_name}, code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[integration.lark.tenantAccessToken] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 获取自定义飞书集成 appAccessToken。
+             */
+            appAccessToken: async (params: { lark_integration_api_name: string }): Promise<any> => {
+                const { lark_integration_api_name } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/integration/v1/namespaces/${this.namespace}/lark/appAccessToken/${lark_integration_api_name}`;
+
+                this.log(LoggerLevel.info, `[integration.lark.appAccessToken] Fetching app token: ${lark_integration_api_name}`);
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders()
+                });
+
+                this.log(LoggerLevel.debug, `[integration.lark.appAccessToken] Token fetched: ${lark_integration_api_name}, code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[integration.lark.appAccessToken] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            }
         }
     };
 
@@ -2360,6 +2709,85 @@ class Client {
     };
 
     /**
+     * 数据集模块
+     */
+    public dataset = {
+        /**
+         * 查询数据集列表。
+         */
+        list: async (params?: {
+            keyword?: string;
+            order_by?: { field?: 'create_time' | 'update_time' | string; direction?: 'asc' | 'desc' | string } | string;
+            page_type?: 'cursor' | 'offset';
+            page_size?: number;
+            page_token?: string;
+            offset?: number | string;
+            created_by?: string[];
+            updated_by?: string[];
+        }): Promise<any> => {
+            await this.ensureTokenValid();
+
+            const url = `/v1/namespaces/${this.namespace}/datasets`;
+            const requestData = params || {};
+
+            this.log(LoggerLevel.info, '[dataset.list] Fetching datasets');
+
+            const res = await this.axiosInstance.post(url, requestData, {
+                headers: this.authHeaders(true)
+            });
+
+            this.log(LoggerLevel.debug, `[dataset.list] Datasets fetched: code=${res.data.code}`);
+            this.log(LoggerLevel.trace, `[dataset.list] Response: ${JSON.stringify(res.data)}`);
+
+            return res.data;
+        },
+
+        /**
+         * 查询全部数据集 - 默认使用 cursor 分页。
+         */
+        listWithIterator: async (params?: {
+            keyword?: string;
+            order_by?: { field?: 'create_time' | 'update_time' | string; direction?: 'asc' | 'desc' | string } | string;
+            page_size?: number;
+            created_by?: string[];
+            updated_by?: string[];
+        }): Promise<{ total: number; datasets: any[]; lastResponse: any }> => {
+            const pageSize = params?.page_size || 100;
+            let pageToken = '';
+            let hasMore = true;
+            let total = 0;
+            const datasets: any[] = [];
+            let lastResponse: any = null;
+
+            while (hasMore) {
+                const res = await this.dataset.list({
+                    ...params,
+                    page_type: 'cursor',
+                    page_size: pageSize,
+                    page_token: pageToken
+                });
+
+                if (res.code !== '0') {
+                    this.log(LoggerLevel.error, `[dataset.listWithIterator] Error fetching datasets: code=${res.code}, msg=${res.msg}`);
+                    throw new Error(res.msg || `Fetch failed with code ${res.code}`);
+                }
+
+                const pageDatasets = res.data?.datasets || res.data?.items || [];
+                if (Array.isArray(pageDatasets)) {
+                    datasets.push(...pageDatasets);
+                }
+
+                total = res.data?.total ?? total;
+                lastResponse = res;
+                pageToken = res.data?.next_page_token || res.data?.page_token || '';
+                hasMore = Boolean(res.data?.has_more && pageToken);
+            }
+
+            return { total, datasets, lastResponse };
+        }
+    };
+
+    /**
      * 自动化流程模块
      */
     public automation = {
@@ -2452,6 +2880,306 @@ class Client {
     };
 
     /**
+     * 流程模块
+     */
+    public workflow = {
+        execution: {
+            /**
+             * 查询异步流程状态。
+             */
+            status: async (params: { execution_id: string | number }): Promise<any> => {
+                const { execution_id } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/v2/workflow/namespaces/${this.namespace}/open_api/execution`;
+
+                this.log(LoggerLevel.info, `[workflow.execution.status] Fetching execution status: ${execution_id}`);
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders(true),
+                    params: { executionId: execution_id }
+                });
+
+                this.log(LoggerLevel.debug, `[workflow.execution.status] Execution status fetched: code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[workflow.execution.status] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            }
+        },
+
+        definition: {
+            /**
+             * 获取流程定义详情。
+             */
+            detail: async (params: { flow_api_name: string }): Promise<any> => {
+                const { flow_api_name } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/flow/v1/namespaces/${this.namespace}/flow/${flow_api_name}`;
+
+                this.log(LoggerLevel.info, `[workflow.definition.detail] Fetching flow definition: ${flow_api_name}`);
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders()
+                });
+
+                this.log(LoggerLevel.debug, `[workflow.definition.detail] Flow definition fetched: ${flow_api_name}, code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[workflow.definition.detail] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            }
+        },
+
+        userTask: {
+            /**
+             * 获取包含人工任务的流程列表。
+             */
+            flows: async (params: { limit: number; offset?: number }): Promise<any> => {
+                await this.ensureTokenValid();
+
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/flow_list`;
+
+                this.log(LoggerLevel.info, '[workflow.userTask.flows] Fetching user-task flows');
+
+                const res = await this.axiosInstance.post(url, params, {
+                    headers: this.authHeaders(true)
+                });
+
+                this.log(LoggerLevel.debug, `[workflow.userTask.flows] User-task flows fetched: code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[workflow.userTask.flows] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 获取包含人工任务的流程实例 ID 列表。
+             */
+            instanceIds: async (params: {
+                page_size?: number;
+                page_token?: string;
+                start_time?: string | number;
+                end_time?: string | number;
+                api_ids?: string[];
+            }): Promise<any> => {
+                const { page_size, page_token, start_time, end_time, api_ids } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/flow/v1/namespaces/${this.namespace}/instances/listids`;
+                const data: any = {};
+                if (start_time !== undefined) data.start_time = String(start_time);
+                if (end_time !== undefined) data.end_time = String(end_time);
+                if (api_ids !== undefined) data.api_ids = api_ids;
+
+                this.log(LoggerLevel.info, '[workflow.userTask.instanceIds] Fetching workflow instance IDs');
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders(true),
+                    params: { page_size, page_token },
+                    data
+                });
+
+                this.log(LoggerLevel.debug, `[workflow.userTask.instanceIds] Workflow instance IDs fetched: code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[workflow.userTask.instanceIds] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 获取流程实例详情。
+             */
+            instanceDetail: async (params: { approval_instance_id: string; includes?: string[] }): Promise<any> => {
+                const { approval_instance_id, includes } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/flow/v1/namespaces/${this.namespace}/instances/${approval_instance_id}`;
+
+                this.log(LoggerLevel.info, `[workflow.userTask.instanceDetail] Fetching workflow instance: ${approval_instance_id}`);
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders(),
+                    params: includes ? { includes } : undefined
+                });
+
+                this.log(LoggerLevel.debug, `[workflow.userTask.instanceDetail] Workflow instance fetched: ${approval_instance_id}, code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[workflow.userTask.instanceDetail] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 批量获取流程实例的任务列表。
+             */
+            instanceTasks: async (params: { approval_instance_ids: Array<string | number>; task_status?: string }): Promise<any> => {
+                const { approval_instance_ids, task_status } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/flow/v1/namespaces/${this.namespace}/instances/usertasks`;
+
+                this.log(LoggerLevel.info, '[workflow.userTask.instanceTasks] Fetching workflow instance tasks');
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders(true),
+                    params: task_status ? { task_status } : undefined,
+                    data: { approval_instance_ids }
+                });
+
+                this.log(LoggerLevel.debug, `[workflow.userTask.instanceTasks] Workflow instance tasks fetched: code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[workflow.userTask.instanceTasks] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 获取任务列表。
+             */
+            tasks: async (params: {
+                type: 'archived' | 'pending' | string;
+                source: 'fromMe' | 'assignMe' | 'CCMe' | string;
+                kunlun_user_id: string;
+                limit?: number | string;
+                offset?: number | string;
+                start_time?: string | number;
+                end_time?: string | number;
+                api_ids?: string[];
+            }): Promise<any> => {
+                await this.ensureTokenValid();
+
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_tasks`;
+
+                this.log(LoggerLevel.info, '[workflow.userTask.tasks] Fetching user tasks');
+
+                const res = await this.axiosInstance.post(url, params, {
+                    headers: this.authHeaders(true)
+                });
+
+                this.log(LoggerLevel.debug, `[workflow.userTask.tasks] User tasks fetched: code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[workflow.userTask.tasks] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            /**
+             * 获取任务详情。
+             */
+            detail: async (params: { task_id: string }): Promise<any> => {
+                const { task_id } = params;
+                await this.ensureTokenValid();
+
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${task_id}/detail`;
+
+                this.log(LoggerLevel.info, `[workflow.userTask.detail] Fetching user task: ${task_id}`);
+
+                const res = await this.axiosInstance.get(url, {
+                    headers: this.authHeaders()
+                });
+
+                this.log(LoggerLevel.debug, `[workflow.userTask.detail] User task fetched: ${task_id}, code=${res.data.code}`);
+                this.log(LoggerLevel.trace, `[workflow.userTask.detail] Response: ${JSON.stringify(res.data)}`);
+
+                return res.data;
+            },
+
+            agree: async (params: { approval_task_id: string; user_id: string; opinion?: string }): Promise<any> => {
+                const { approval_task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${approval_task_id}/agree`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            reject: async (params: { approval_task_id: string; user_id: string; opinion?: string }): Promise<any> => {
+                const { approval_task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${approval_task_id}/reject`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            transfer: async (params: {
+                approval_task_id: string;
+                user_id: string;
+                from_user_ids: string[];
+                to_user_ids: string[];
+                opinion?: string;
+            }): Promise<any> => {
+                const { approval_task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${approval_task_id}/trans`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            addAssignee: async (params: {
+                approval_task_id: string;
+                user_id: string;
+                approvers: string[];
+                add_assignee_type: 'currentAndAddAssign' | 'afterAndAddAssign' | string;
+                opinion?: string;
+            }): Promise<any> => {
+                const { approval_task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${approval_task_id}/add_assignee`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            cc: async (params: { task_id: string; cc_user_ids: string[]; operator_user_id: string }): Promise<any> => {
+                const { task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${task_id}/cc`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            expedite: async (params: { task_id: string; expediting_user_ids: string[]; operator_user_id: string; opinion?: string }): Promise<any> => {
+                const { task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${task_id}/expediting`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            cancelInstance: async (params: { approval_instance_id: string; user_id: string; opinion?: string }): Promise<any> => {
+                const { approval_instance_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/instance/${approval_instance_id}/cancel`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            rollbackPoints: async (params: { task_id: string; operator_user_id: string }): Promise<any> => {
+                const { task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${task_id}/rollback_points`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            rollback: async (params: { task_id: string; operator_user_id: string; to_task_id: string; opinion?: string }): Promise<any> => {
+                const { task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${task_id}/rollback`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            },
+
+            startChat: async (params: {
+                task_id: string;
+                operator_user_id: string;
+                invite_user_ids?: string[];
+                chat_id?: string;
+                chat_name?: string;
+            }): Promise<any> => {
+                const { task_id, ...data } = params;
+                await this.ensureTokenValid();
+                const url = `/api/flow/v1/namespaces/${this.namespace}/user_task/${task_id}/chat`;
+                const res = await this.axiosInstance.post(url, data, { headers: this.authHeaders(true) });
+                return res.data;
+            }
+        }
+    };
+
+    /**
      * 数据对象结构管理模块（Schema）
      */
     public schema = {
@@ -2473,7 +3201,7 @@ class Client {
                     display_name?: string;
                     search_layout?: string[];
                 };
-                fields: Array<{
+                fields?: Array<{
                     api_name: string;
                     label: {
                         zh_cn: string;
@@ -2488,17 +3216,18 @@ class Client {
             }>;
         }): Promise<any> => {
             const { objects } = params;
+            const requestObjects = normalizeSchemaObjectsForWrite(objects);
             await this.ensureTokenValid();
 
             const url = `/v1/namespaces/${this.namespace}/objects/batch_create`;
 
             this.log(LoggerLevel.info, `[schema.create] Creating ${objects.length} object(s)`);
             this.log(LoggerLevel.trace, `[schema.create] Request URL: ${this.axiosInstance.defaults.baseURL}${url}`);
-            this.log(LoggerLevel.trace, `[schema.create] Request Body: ${JSON.stringify({ objects }, null, 2)}`);
+            this.log(LoggerLevel.trace, `[schema.create] Request Body: ${JSON.stringify({ objects: requestObjects }, null, 2)}`);
 
             const res = await this.axiosInstance.post(
                 url,
-                { objects },
+                { objects: requestObjects },
                 {
                     headers: {
                         Authorization: `${this.accessToken}`,
@@ -2591,17 +3320,18 @@ class Client {
             }>;
         }): Promise<any> => {
             const { objects } = params;
+            const requestObjects = normalizeSchemaObjectsForWrite(objects);
             await this.ensureTokenValid();
 
             const url = `/v1/namespaces/${this.namespace}/objects/batch_update`;
 
             this.log(LoggerLevel.info, `[schema.update] Updating ${objects.length} object(s)`);
             this.log(LoggerLevel.trace, `[schema.update] Request URL: ${this.axiosInstance.defaults.baseURL}${url}`);
-            this.log(LoggerLevel.trace, `[schema.update] Request Body: ${JSON.stringify({ objects }, null, 2)}`);
+            this.log(LoggerLevel.trace, `[schema.update] Request Body: ${JSON.stringify({ objects: requestObjects }, null, 2)}`);
 
             const res = await this.axiosInstance.post(
                 url,
-                { objects },
+                { objects: requestObjects },
                 {
                     headers: {
                         Authorization: `${this.accessToken}`,
@@ -2661,6 +3391,63 @@ class Client {
             this.log(LoggerLevel.trace, `[schema.delete] Response: ${JSON.stringify(res.data)}`);
 
             return res.data;
+        },
+
+        /**
+         * 校验 schema 写接口响应，覆盖请求级错误、data=null 静默失败、item 级失败。
+         */
+        checkResponse: checkSchemaResponse,
+
+        /**
+         * 返回 schema 写接口响应校验结果，不抛错。
+         */
+        validateResponse: validateSchemaResponse,
+
+        /**
+         * 按 schema 单批 10 个对象的限制分批执行。
+         */
+        batchExecute,
+
+        /**
+         * 创建对象空壳。会移除 fields，并将 display/search 临时指向 _id。
+         */
+        createShells: async (params: { objects: SchemaManagedObjectDefinition[] } & SchemaCreateShellsOptions): Promise<SchemaCreateShellsResult> => {
+            return createSchemaObjectShells(this, params.objects, params);
+        },
+
+        /**
+         * 幂等添加字段：先读 metadata，跳过已存在字段，再调用 schema.update。
+         */
+        addFieldsIdempotent: async (params: {
+            object_name: string;
+            fields: SchemaStageFieldDefinition[];
+        } & SchemaAddFieldsOptions): Promise<SchemaAddFieldsResult> => {
+            return addFieldsIdempotent(this, params.object_name, params.fields, params);
+        },
+
+        /**
+         * 三阶段创建对象：空壳 -> 基础字段 -> lookup -> reference_field -> final settings。
+         */
+        createWithStages: async (params: {
+            objects: SchemaManagedObjectDefinition[];
+        } & SchemaCreateObjectsInStagesOptions): Promise<SchemaCreateObjectsInStagesResult> => {
+            return createSchemaObjectsInStages(this, params.objects, params);
+        },
+
+        /**
+         * 写后验证对象和字段，可选导出 Markdown。
+         */
+        verifyObjects: async (params: {
+            object_names: string[];
+        } & SchemaVerificationOptions): Promise<SchemaVerificationResult> => {
+            return verifySchemaObjects(this, params.object_names, params);
+        },
+
+        /**
+         * 删除全部自定义对象。高风险操作，必须显式传 confirm: true。
+         */
+        deleteAllCustomObjects: async (params: DeleteAllCustomObjectsOptions & { confirm: true }): Promise<DeleteAllCustomObjectsResult> => {
+            return deleteAllCustomObjects(this, params);
         }
     };
 }
@@ -2686,7 +3473,34 @@ export type {
     MetadataFieldType,
     SchemaFieldType,
     FieldCreateRule,
-    OptionColor
+    OptionColor,
+    OptionColorCode,
+    SqlTypeMapping,
+    ColumnNameSemanticRule,
+    SqlConstraintMapping,
+    DeleteAllCustomObjectsOptions,
+    DeleteAllCustomObjectsResult,
+    SchemaAddFieldsOptions,
+    SchemaAddFieldsResult,
+    SchemaBatchExecuteOptions,
+    SchemaBatchExecuteResult,
+    SchemaBatchInfo,
+    SchemaCreateObjectsInStagesOptions,
+    SchemaCreateObjectsInStagesResult,
+    SchemaCreateShellsOptions,
+    SchemaCreateShellsResult,
+    SchemaFieldRemovalPlan,
+    SchemaManagedObjectDefinition,
+    SchemaObjectVerification,
+    SchemaResponse,
+    SchemaResponseFailure,
+    SchemaResponseFailureLayer,
+    SchemaResponseItem,
+    SchemaResponseValidationOptions,
+    SchemaResponseValidationResult,
+    SchemaStageFieldDefinition,
+    SchemaVerificationOptions,
+    SchemaVerificationResult
 };
 
 export {
@@ -2711,9 +3525,30 @@ export {
     // Schema rules
     SCHEMA_TYPE_BY_METADATA_TYPE,
     OPTION_COLOR_LIST,
+    OPTION_COLOR_CODE_BY_NAME,
+    OPTION_COLOR_NAME_BY_CODE,
     OPTION_COLOR_RULES,
     FIELD_SCHEMA_RULES,
     SCHEMA_TYPE_MISMATCHES,
+    SQL_TYPE_TO_SCHEMA_TYPE,
+    COLUMN_NAME_SEMANTIC_RULES,
+    SQL_CONSTRAINT_TO_SETTINGS,
     BATCH_UPDATE_REQUIREMENTS,
-    getOptionColor
+    getOptionColor,
+    getOptionColorCode,
+    normalizeOptionColorForSchema,
+    // Schema runtime helpers
+    SCHEMA_BATCH_SIZE,
+    addFieldsIdempotent,
+    batchExecute,
+    buildFieldRemovalPlan,
+    checkSchemaResponse,
+    createSchemaObjectShells,
+    createSchemaObjectsInStages,
+    deleteAllCustomObjects,
+    isSystemSchemaName,
+    normalizeSchemaObjectsForWrite,
+    splitSchemaFieldsByDependency,
+    validateSchemaResponse,
+    verifySchemaObjects
 };

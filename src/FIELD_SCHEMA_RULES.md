@@ -83,9 +83,24 @@ Create/update schema payloads use snake_case keys:
 - Option source: `type.settings.option_source`
 - Global option API name: `type.settings.global_option_api_name`
 
+OpenAPI write payloads require color short codes, while metadata returns color names. The SDK normalizes these metadata names before writing:
+
+| Metadata color | OpenAPI write code |
+|---|---|
+| `blue` | `B` |
+| `cyan` | `W` |
+| `green` | `G` |
+| `yellow` | `Y` |
+| `orange` | `O` |
+| `red` | `R` |
+| `magenta` | `V` |
+| `purple` | `P` |
+| `blueMagenta` | `I` |
+| `grey` | `N` |
+
 Do not copy metadata `optionList` back into `schema.update`; convert it to `options`.
 
-Use `getOptionColor(index)` from the SDK to assign colors in this stable 10-color cycle.
+Use `getOptionColor(index)` from the SDK to assign metadata color names in this stable 10-color cycle. Use `getOptionColorCode(color)` only when constructing raw OpenAPI payloads outside the SDK normalizer.
 
 ## Batch update (`batch_update`) rules
 
@@ -100,3 +115,5 @@ Use `getOptionColor(index)` from the SDK to assign colors in this stable 10-colo
 ## Canonical machine-readable source
 
 Use `/Users/Ethan/apaas/apaas-sdk/node-client/src/field-schema-rules.ts` as the source of truth for code.
+
+The SDK exports `SQL_TYPE_TO_SCHEMA_TYPE`, `COLUMN_NAME_SEMANTIC_RULES`, and `SQL_CONSTRAINT_TO_SETTINGS` for SQL/ER conversion workflows.

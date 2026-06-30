@@ -13,30 +13,17 @@ Use this reference for whole-application object maintenance: reading object stru
 
 ## Response Validation
 
-Check three layers after every schema call:
+Check three layers after every raw schema call with the SDK helper:
 
 ```ts
-function checkSchemaResponse(result: any, context: string) {
-  if (result.code !== "0") {
-    throw new Error(`${context} request failed: ${result.code} ${result.msg || ""}`);
-  }
-
-  if (result.data === null) {
-    throw new Error(`${context} silently failed: result.code is 0 but result.data is null`);
-  }
-
-  const failed = (result.data?.items || []).filter((item: any) => item.status?.code !== "0");
-  if (failed.length > 0) {
-    throw new Error(`${context} item failures: ${JSON.stringify(failed)}`);
-  }
-}
+client.schema.checkResponse(result, "schema.update");
 ```
 
 `code: "0"` with `data: null` is not success. It usually means a required setting is missing, for example `text.multiline` or `auto_number.generation_method`.
 
 ## Create Objects: Three Stages
 
-Do not create a full object with fields in one call. Use this sequence even when there is no obvious dependency cycle.
+Do not create a full object with raw `schema.create({ fields })`. Use `client.schema.createWithStages()` when fields are involved. It enforces this sequence even when there is no obvious dependency cycle.
 
 1. Stage 1a: create object shells only.
 2. Stage 1b: add base fields with `schema.update` and `operator: "add"`.
@@ -45,19 +32,11 @@ Do not create a full object with fields in one call. Use this sequence even when
 5. Final: update `display_name`, `allow_search_fields`, and `search_layout` after fields exist.
 
 ```ts
-await client.schema.create({
+await client.schema.createWithStages({
   objects: [{
     api_name: "customer",
     label: { zh_cn: "客户", en_us: "Customer" },
-    settings: { display_name: "_id", allow_search_fields: ["_id"], search_layout: [] }
-  }]
-});
-```
-
-```ts
-await client.schema.update({
-  objects: [{
-    api_name: "customer",
+    settings: { display_name: "name", allow_search_fields: ["_id", "name"], search_layout: [] },
     fields: [{
       operator: "add",
       api_name: "name",
@@ -86,14 +65,10 @@ await client.schema.update({
 - Skip existing fields when rerunning idempotently.
 
 ```ts
-async function addFieldsIdempotent(client: any, objectName: string, fieldsToAdd: any[]) {
-  const metadata = await client.object.metadata.fields({ object_name: objectName });
-  const existingNames = new Set((metadata.data?.fields || []).map((field: any) => field.apiName));
-  const newFields = fieldsToAdd.filter(field => !existingNames.has(field.api_name));
-  if (newFields.length === 0) return;
-  const result = await client.schema.update({ objects: [{ api_name: objectName, fields: newFields }] });
-  checkSchemaResponse(result, `addFields(${objectName})`);
-}
+await client.schema.addFieldsIdempotent({
+  object_name: "customer",
+  fields: fieldsToAdd
+});
 ```
 
 ## Dependency Order
@@ -116,15 +91,16 @@ Never add a lookup and a reference field that depends on it in the same `schema.
 
 ## Delete All Custom Objects
 
-Use this flow for environment cleanup or model rebuilds:
+Use the SDK helper for environment cleanup or model rebuilds:
 
-1. List objects with `client.object.listWithIterator()`.
-2. Filter out system objects whose API name starts with `_`.
-3. Read fields for each custom object.
-4. Remove `referenceField` fields grouped by object.
-5. Remove `lookup` fields grouped by object.
-6. Delete custom objects in batches of 10.
-7. Re-list objects to verify deletion.
+```ts
+await client.schema.deleteAllCustomObjects({
+  confirm: true,
+  removeOtherFields: true
+});
+```
+
+The helper lists custom objects, reads fields, removes `referenceField`, then `lookup`, then optional other custom fields, deletes objects in batches of 10, and re-lists objects to verify deletion.
 
 ## SQL / ER To aPaaS Mapping
 

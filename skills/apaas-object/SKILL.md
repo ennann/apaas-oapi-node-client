@@ -1,11 +1,11 @@
 ---
 name: apaas-object
-description: "Use for aPaaS Node SDK object metadata and record operations: listing objects, reading fields, exporting metadata to Markdown, querying records, count, create, update, delete, batch operations, pagination, and record-level error recovery."
+description: "Use for aPaaS Node SDK object/data operations: object metadata, fields, Markdown export, record CRUD, batch operations, OQL, cross-object search, constant objects, datasets, pagination, ID cursor pagination, and record-level error recovery."
 ---
 
 # aPaaS Object
 
-Use this skill for `client.object.*`.
+Use this skill for `client.object.*`, `client.constant.*`, and `client.dataset.*`.
 
 ## Workflow
 
@@ -14,6 +14,8 @@ Use this skill for `client.object.*`.
 3. Read before write when the payload depends on field type or readonly status.
 4. Use iterator helpers for full-result work.
 5. Check SDK response codes and failed item lists.
+
+Read [references/id-cursor-pagination.md](references/id-cursor-pagination.md) when a task needs full-table reads, large offset pagination, or a doc mentions ID cursor pagination.
 
 ## Metadata
 
@@ -42,6 +44,8 @@ Use returned API names, not user-facing labels, in later calls.
 - Use `search.records` for one page.
 - Use `search.recordsWithIterator` for full-table or full-filter tasks.
 - Use `search.count` when only the count is needed.
+- Use `object.oql` when the user gives an OQL statement or needs OQL-only query features.
+- Use `search.recordsAcrossObjects` for global search across up to 5 objects.
 
 ```ts
 const { total, items } = await client.object.search.recordsWithIterator({
@@ -57,6 +61,41 @@ const { total, items } = await client.object.search.recordsWithIterator({
 ```
 
 Do not answer global max/min/top/count questions from a single page unless the user asked for a sample.
+
+## OQL And Cross-Object Search
+
+```ts
+const oql = await client.object.oql({
+  query: "SELECT _id, _name FROM _user WHERE _type = $1 LIMIT 10",
+  args: ["_employee"]
+});
+
+const search = await client.object.search.recordsAcrossObjects({
+  q: "Ethan",
+  search_objects: [{
+    api_name: "_user",
+    select: ["_id", "_name"],
+    search_fields: ["_name"]
+  }],
+  page_size: 20,
+  metadata: "Label"
+});
+```
+
+## Constant Objects And Datasets
+
+Use `client.constant.*` for `_currency`, `_country`, and `_timeZone`.
+
+```ts
+const currencies = await client.constant.records({
+  object_name: "_currency",
+  data: { limit: 100, offset: 0, count: false, fields: ["_id", "_name"] }
+});
+
+const datasets = await client.dataset.listWithIterator({
+  page_size: 100
+});
+```
 
 ## Record Writes
 

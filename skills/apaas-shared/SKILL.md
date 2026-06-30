@@ -1,6 +1,6 @@
 ---
 name: apaas-shared
-description: "Use for aPaaS Node SDK shared setup and safety rules: client initialization, credentials, namespace, token cache, logger level, pagination defaults, retry expectations, write/delete confirmation, and error triage before using module-specific apaas skills."
+description: "Use for aPaaS Node SDK shared setup and safety rules: client initialization, credentials, namespace, token cache, logger level, OpenAPI coverage, pagination defaults, retry expectations, write/delete confirmation, and error-code triage before using module-specific apaas skills."
 ---
 
 # aPaaS Shared
@@ -14,6 +14,8 @@ Use this skill before module-specific aPaaS SDK work.
 - Keep `clientId`, `clientSecret`, access tokens, and app secrets out of logs and final answers.
 - Prefer `client.setLoggerLevel(3)` for normal work, `4` for debugging, and `5` only when inspecting non-sensitive payloads.
 - Treat SDK responses with `code !== "0"` as failed even if the HTTP call succeeded.
+- Read [references/openapi-coverage.md](references/openapi-coverage.md) when checking whether an API doc endpoint is already wrapped.
+- Read [references/openapi-error-codes.md](references/openapi-error-codes.md) when triaging non-zero response codes.
 
 ```ts
 import { apaas } from "apaas-oapi-client";
@@ -39,8 +41,9 @@ client.setLoggerLevel(3);
 ## Module Routing
 
 - Object metadata and record CRUD: use `apaas-object`.
+- OQL, cross-object search, constant objects, and datasets: use `apaas-object`.
 - Object and field schema changes: use `apaas-schema`.
-- Cloud functions and automation flows: use `apaas-function-flow`.
+- Cloud functions, automation flows, workflow status, user tasks, and Lark integration tokens: use `apaas-function-flow`.
 - Builder page metadata and links: use `apaas-builder`.
 - Global options and variables: use `apaas-global`.
 - User/department ID exchange and attachments: use `apaas-exchange-attachment`.
