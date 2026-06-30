@@ -205,13 +205,19 @@ function normalizeSchemaFieldForWrite<T extends { type?: any }>(field: T): T {
         return { ...field };
     }
 
+    const normalizedSettings = { ...settings };
+    if (normalizedSettings.option_type === 'custom' || normalizedSettings.option_source === 'custom') {
+        normalizedSettings.option_type = 'local';
+        delete normalizedSettings.option_source;
+    }
+
     return {
         ...field,
         type: {
             ...field.type,
             settings: {
-                ...settings,
-                options: settings.options.map((option: any) => {
+                ...normalizedSettings,
+                options: normalizedSettings.options.map((option: any) => {
                     if (!option || typeof option !== 'object' || !('color' in option)) {
                         return option;
                     }

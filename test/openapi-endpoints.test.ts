@@ -59,7 +59,7 @@ describe('OpenAPI endpoint coverage', () => {
         expect(calls[6].data).toEqual({ page_type: 'cursor', page_size: 100 });
     });
 
-    it('normalizes enum option metadata color names before schema writes', async () => {
+    it('normalizes enum option metadata color names and custom source before schema writes', async () => {
         const { client, calls } = createMockClient();
 
         await client.schema.update({
@@ -90,8 +90,42 @@ describe('OpenAPI endpoint coverage', () => {
             }]
         });
 
-        expect(calls[0].data.objects[0].fields[0].type.settings.options.map((option: any) => option.color))
+        const settings = calls[0].data.objects[0].fields[0].type.settings;
+        expect(settings.option_source).toBeUndefined();
+        expect(settings.option_type).toBe('local');
+        expect(settings.options.map((option: any) => option.color))
             .toEqual(['B', 'W', 'V', 'I', 'N']);
+    });
+
+    it('normalizes legacy enum option_type custom to UI-editable local source', async () => {
+        const { client, calls } = createMockClient();
+
+        await client.schema.update({
+            objects: [{
+                api_name: 'product',
+                fields: [{
+                    operator: 'add',
+                    api_name: 'status',
+                    label: { zh_cn: '状态', en_us: 'Status' },
+                    type: {
+                        name: 'enum',
+                        settings: {
+                            required: false,
+                            multiple: false,
+                            option_type: 'custom',
+                            options: [
+                                { label: { zh_cn: '蓝', en_us: 'Blue' }, api_name: 'blue', color: 'blue', active: true }
+                            ]
+                        }
+                    },
+                    encrypt_type: 'none'
+                }]
+            }]
+        });
+
+        const settings = calls[0].data.objects[0].fields[0].type.settings;
+        expect(settings.option_type).toBe('local');
+        expect(settings.options[0].color).toBe('B');
     });
 
     it('wraps workflow and integration endpoints from the API doc', async () => {

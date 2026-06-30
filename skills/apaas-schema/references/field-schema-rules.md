@@ -94,7 +94,7 @@ blue, cyan, green, yellow, orange, red, magenta, purple, blueMagenta, grey, blue
   type: {
     name: "enum",
     settings: {
-      option_source: "custom",
+      option_type: "local",
       global_option_api_name: "",
       options: [
         { api_name: "option_x", color: "blue", active: true, label: { zh_cn: "1", en_us: "1" } }
@@ -103,6 +103,8 @@ blue, cyan, green, yellow, orange, red, magenta, purple, blueMagenta, grey, blue
   }
 }
 ```
+
+For UI-editable custom options, use `option_type: "local"`. The SDK accepts legacy `option_source: "custom"` or `option_type: "custom"` and normalizes them to `option_type: "local"` before writing.
 
 OpenAPI write payloads require color short codes, while metadata returns color names. The SDK normalizes these names before writing, so SDK callers can keep using `blue`, `cyan`, etc.
 

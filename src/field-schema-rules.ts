@@ -157,7 +157,8 @@ export const OPTION_COLOR_RULES = {
         colorPath: 'type.settings.options[].color',
         colorInput: 'SDK accepts metadata color names and normalizes them to OpenAPI color codes before writing.',
         colorCodeByName: OPTION_COLOR_CODE_BY_NAME,
-        sourcePath: 'type.settings.option_source',
+        sourcePath: 'type.settings.option_type',
+        customSourceValue: 'local',
         globalOptionPath: 'type.settings.global_option_api_name'
     }
 } as const;
@@ -224,7 +225,7 @@ export const FIELD_SCHEMA_RULES: FieldCreateRule[] = [
         settingsExample: {
             required: false,
             multiple: false,
-            option_source: 'custom',
+            option_type: 'local',
             global_option_api_name: '',
             options: [
                 {
@@ -243,7 +244,7 @@ export const FIELD_SCHEMA_RULES: FieldCreateRule[] = [
                 }
             ]
         },
-        notes: `Do not send create type as \`option\`. Metadata returns optionList/optionSource/globalOptionAPIName; create/update expects options/option_source/global_option_api_name. The SDK accepts metadata color names and sends OpenAPI color codes (${Object.entries(OPTION_COLOR_CODE_BY_NAME).map(([name, code]) => `${name}=${code}`).join(', ')}).`
+        notes: `Do not send create type as \`option\`. Metadata returns optionList/optionSource/globalOptionAPIName; create/update expects options and UI-editable custom options require option_type=local. The SDK also accepts legacy option_source=custom or option_type=custom and sends option_type=local. The SDK accepts metadata color names and sends OpenAPI color codes (${Object.entries(OPTION_COLOR_CODE_BY_NAME).map(([name, code]) => `${name}=${code}`).join(', ')}).`
     },
     {
         metadataType: 'boolean',

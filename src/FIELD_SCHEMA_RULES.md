@@ -76,12 +76,14 @@ Live metadata for option fields returns camelCase keys:
 - Option source: `type.settings.optionSource`
 - Global option API name: `type.settings.globalOptionAPIName`
 
-Create/update schema payloads use snake_case keys:
+Create/update schema payloads use write keys:
 
 - Type name: `enum`
 - Options path: `type.settings.options`
-- Option source: `type.settings.option_source`
+- Custom option source: `type.settings.option_type = "local"`
 - Global option API name: `type.settings.global_option_api_name`
+
+For UI-editable custom options, send `option_type: "local"`. The SDK also accepts legacy `option_source: "custom"` or `option_type: "custom"` and normalizes them to `option_type: "local"` before writing.
 
 OpenAPI write payloads require color short codes, while metadata returns color names. The SDK normalizes these metadata names before writing:
 
