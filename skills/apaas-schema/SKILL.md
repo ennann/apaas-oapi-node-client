@@ -7,20 +7,24 @@ description: "Use for aPaaS Node SDK schema management: creating objects, updati
 
 Use this skill for `client.schema.*`.
 
-## Required Reference
+## Required References
 
-Before creating or updating fields, read `references/field-schema-rules.md`. It contains the verified metadata-to-create type mapping and dependency order.
+- Before creating or updating fields, read `references/field-schema-rules.md`. It contains the verified metadata-to-create type mapping and option color rules.
+- For whole-app object maintenance, SQL/ER conversion, multi-object dependencies, or delete/rebuild workflows, read `references/schema-maintenance-sop.md`.
 
 ## Workflow
 
 1. Use `apaas-shared` to initialize the client.
 2. Read current objects with `client.object.listWithIterator()`.
 3. Read existing fields with `client.object.metadata.fields({ object_name })`.
-4. Build the smallest schema payload that matches the requested change.
-5. For dependency fields, create target objects first, then lookup fields, then reference fields.
-6. After the call, re-read metadata to verify the effective schema.
+4. For new objects, create shells first, then add fields with `schema.update`.
+5. For dependency fields, create base fields first, then lookup fields, then reference fields.
+6. Check request-level, silent-failure, and item-level response status.
+7. After the call, re-read metadata to verify the effective schema.
 
 ## Create Object
+
+Create objects as shells first. Do not rely on `schema.create({ fields })` to create fields.
 
 ```ts
 await client.schema.create({
@@ -28,19 +32,10 @@ await client.schema.create({
     api_name: "product",
     label: { zh_cn: "产品", en_us: "Product" },
     settings: {
-      display_name: "name",
-      allow_search_fields: ["_id", "code", "name"],
-      search_layout: ["code", "name"]
-    },
-    fields: [{
-      api_name: "code",
-      label: { zh_cn: "产品编号", en_us: "Product Code" },
-      type: {
-        name: "text",
-        settings: { required: true, unique: true, max_length: 50 }
-      },
-      encrypt_type: "none"
-    }]
+      display_name: "_id",
+      allow_search_fields: ["_id"],
+      search_layout: []
+    }
   }]
 });
 ```

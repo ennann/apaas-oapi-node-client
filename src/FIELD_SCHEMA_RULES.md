@@ -7,6 +7,7 @@ This file summarizes the verified schema rules for field types in aPaaS.
 - Source object for metadata: `full_field_format`
 - Lookup target used in tests: `_user`
 - Reference field target used in tests: `_lark_user_id`
+- Option color live check: `package_154107__c.object_test2.option_colors` on `2026-06-30`
 
 ## Why this file exists
 
@@ -65,6 +66,26 @@ Allowed option colors:
 - `purple`
 - `blueMagenta`
 - `grey`
+
+Use the colors in this order and cycle from the beginning when options exceed 10.
+
+Live metadata for option fields returns camelCase keys:
+
+- Type name: `option`
+- Options path: `type.settings.optionList`
+- Option source: `type.settings.optionSource`
+- Global option API name: `type.settings.globalOptionAPIName`
+
+Create/update schema payloads use snake_case keys:
+
+- Type name: `enum`
+- Options path: `type.settings.options`
+- Option source: `type.settings.option_source`
+- Global option API name: `type.settings.global_option_api_name`
+
+Do not copy metadata `optionList` back into `schema.update`; convert it to `options`.
+
+Use `getOptionColor(index)` from the SDK to assign colors in this stable 10-color cycle.
 
 ## Batch update (`batch_update`) rules
 

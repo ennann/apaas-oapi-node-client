@@ -29,6 +29,19 @@ import {
     type CreateObjectDefinition,
     type UpdateObjectDefinition
 } from './field-types';
+import {
+    SCHEMA_TYPE_BY_METADATA_TYPE,
+    OPTION_COLOR_LIST,
+    OPTION_COLOR_RULES,
+    FIELD_SCHEMA_RULES,
+    SCHEMA_TYPE_MISMATCHES,
+    BATCH_UPDATE_REQUIREMENTS,
+    getOptionColor,
+    type MetadataFieldType,
+    type SchemaFieldType,
+    type FieldCreateRule,
+    type OptionColor
+} from './field-schema-rules';
 
 /**
  * 批量操作结果
@@ -2669,7 +2682,11 @@ export type {
     CreateFieldDefinition,
     UpdateFieldDefinition,
     CreateObjectDefinition,
-    UpdateObjectDefinition
+    UpdateObjectDefinition,
+    MetadataFieldType,
+    SchemaFieldType,
+    FieldCreateRule,
+    OptionColor
 };
 
 export {
@@ -2690,5 +2707,13 @@ export {
     getFieldType,
     isSystemField,
     createMultilingualText,
-    extractMultilingualText
+    extractMultilingualText,
+    // Schema rules
+    SCHEMA_TYPE_BY_METADATA_TYPE,
+    OPTION_COLOR_LIST,
+    OPTION_COLOR_RULES,
+    FIELD_SCHEMA_RULES,
+    SCHEMA_TYPE_MISMATCHES,
+    BATCH_UPDATE_REQUIREMENTS,
+    getOptionColor
 };

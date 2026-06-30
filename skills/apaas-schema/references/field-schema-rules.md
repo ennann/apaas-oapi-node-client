@@ -5,6 +5,7 @@ Use this reference before `client.schema.create` or `client.schema.update` field
 - Verified source in this repo: `src/FIELD_SCHEMA_RULES.md`
 - Machine-readable source: `src/field-schema-rules.ts`
 - Verification date in source: `2026-02-10`
+- Option color live check: `package_154107__c.object_test2.option_colors` on `2026-06-30`
 
 ## Metadata To Create Type Mapping
 
@@ -60,6 +61,52 @@ Allowed option colors:
 - `purple`
 - `blueMagenta`
 - `grey`
+
+Use the colors in this order and cycle from the beginning when options exceed 10. The live `object_test2.option_colors` check returned colors 1-12 as:
+
+```text
+blue, cyan, green, yellow, orange, red, magenta, purple, blueMagenta, grey, blue, cyan
+```
+
+### Option Metadata Shape vs Create Shape
+
+`object.metadata.fields` returns option fields in metadata shape:
+
+```ts
+{
+  type: {
+    name: "option",
+    settings: {
+      optionSource: "custom",
+      globalOptionAPIName: "",
+      optionList: [
+        { apiName: "option_x", color: "blue", active: true, label: [{ language_code: 2052, text: "1" }] }
+      ]
+    }
+  }
+}
+```
+
+`schema.create` / `schema.update` must use create shape:
+
+```ts
+{
+  type: {
+    name: "enum",
+    settings: {
+      option_source: "custom",
+      global_option_api_name: "",
+      options: [
+        { api_name: "option_x", color: "blue", active: true, label: { zh_cn: "1", en_us: "1" } }
+      ]
+    }
+  }
+}
+```
+
+Do not copy metadata `optionList` back into `schema.update`; convert it to `options`.
+
+Use `getOptionColor(index)` from the SDK to assign colors in this stable 10-color cycle.
 
 ## Minimal Lookup Example
 

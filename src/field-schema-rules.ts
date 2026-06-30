@@ -94,6 +94,41 @@ export const OPTION_COLOR_LIST = [
     'grey'
 ] as const;
 
+export type OptionColor = typeof OPTION_COLOR_LIST[number];
+
+export function getOptionColor(index: number): OptionColor {
+    if (!Number.isInteger(index) || index < 0) {
+        throw new Error('Option color index must be a non-negative integer.');
+    }
+
+    return OPTION_COLOR_LIST[index % OPTION_COLOR_LIST.length];
+}
+
+export const OPTION_COLOR_RULES = {
+    allowedColors: OPTION_COLOR_LIST,
+    assignment: 'Use OPTION_COLOR_LIST in order and cycle from the beginning when options exceed 10.',
+    verifiedBy: {
+        namespace: 'package_154107__c',
+        object: 'object_test2',
+        field: 'option_colors',
+        date: '2026-06-30'
+    },
+    metadataShape: {
+        typeName: 'option',
+        optionListPath: 'type.settings.optionList',
+        colorPath: 'type.settings.optionList[].color',
+        sourcePath: 'type.settings.optionSource',
+        globalOptionPath: 'type.settings.globalOptionAPIName'
+    },
+    createShape: {
+        typeName: 'enum',
+        optionsPath: 'type.settings.options',
+        colorPath: 'type.settings.options[].color',
+        sourcePath: 'type.settings.option_source',
+        globalOptionPath: 'type.settings.global_option_api_name'
+    }
+} as const;
+
 export const FIELD_SCHEMA_RULES: FieldCreateRule[] = [
     {
         metadataType: 'text',
@@ -175,7 +210,7 @@ export const FIELD_SCHEMA_RULES: FieldCreateRule[] = [
                 }
             ]
         },
-        notes: `Do not send create type as \`option\`. Available option colors: ${OPTION_COLOR_LIST.join(', ')}.`
+        notes: `Do not send create type as \`option\`. Metadata returns optionList/optionSource/globalOptionAPIName; create/update expects options/option_source/global_option_api_name. Available option colors: ${OPTION_COLOR_LIST.join(', ')}.`
     },
     {
         metadataType: 'boolean',
