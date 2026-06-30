@@ -31,5 +31,18 @@ jobs:
       - name: Run Tests
         run: npm test
 
+      - name: Check package version
+        id: package
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "apaas-oapi-client@$VERSION" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION already exists on npm. Skipping publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION is new. Publishing."
+          fi
+
       - name: Publish to npm
+        if: steps.package.outputs.exists == 'false'
         run: npm publish
