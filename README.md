@@ -51,7 +51,25 @@ mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
 cp -R skills/apaas-* "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
-通过 npx 从 npm 直接安装：
+通过官方 Skills CLI 从 GitHub 安装：
+
+```bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --skill apaas-object
+```
+
+安装全部 aPaaS Skills：
+
+```bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --skill '*'
+```
+
+查看仓库内可用 Skills：
+
+```bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --list
+```
+
+通过本包内置安装器从 npm 安装：
 
 ```bash
 npx apaas-oapi-client install-skills
