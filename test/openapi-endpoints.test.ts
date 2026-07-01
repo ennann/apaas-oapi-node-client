@@ -15,14 +15,22 @@ function createMockClient() {
         defaults: { baseURL: 'https://ae-openapi.feishu.cn' },
         post: jest.fn(async (url: string, data?: any, config?: any) => {
             calls.push({ method: 'POST', url, data, config });
-            return { data: { code: '0', msg: 'success', data: { items: [], datasets: [], has_more: false } } };
+            const responseData = Array.isArray(data?.department_ids)
+                ? data.department_ids.map((id: string) => ({ id }))
+                : Array.isArray(data?.user_ids)
+                ? data.user_ids.map((id: string) => ({ id }))
+                : { items: [], datasets: [], has_more: false };
+            return { data: { code: '0', msg: 'success', data: responseData } };
         }),
         get: jest.fn(async (url: string, config?: any) => {
             calls.push({ method: 'GET', url, config });
             return { data: { code: '0', msg: 'success', data: { items: [], has_more: false } } };
         }),
         patch: jest.fn(),
-        delete: jest.fn()
+        delete: jest.fn(async (url: string, config?: any) => {
+            calls.push({ method: 'DELETE', url, config });
+            return { data: { code: '0', msg: 'success', data: {} } };
+        })
     };
 
     return { client, calls };
@@ -62,7 +70,9 @@ describe('OpenAPI endpoint coverage', () => {
     it('normalizes enum option metadata color names and custom source before schema writes', async () => {
         const { client, calls } = createMockClient();
 
-        await client.schema.update({
+        expect(client.object.schema).toBe(client.schema);
+
+        await client.object.schema.update({
             objects: [{
                 api_name: 'product',
                 fields: [{
@@ -100,7 +110,7 @@ describe('OpenAPI endpoint coverage', () => {
     it('normalizes legacy enum option_type custom to UI-editable local source', async () => {
         const { client, calls } = createMockClient();
 
-        await client.schema.update({
+        await client.object.schema.update({
             objects: [{
                 api_name: 'product',
                 fields: [{
@@ -195,5 +205,134 @@ describe('OpenAPI endpoint coverage', () => {
         expect(calls[0].config.params).toEqual({ executionId: 1848390852196499 });
         expect(calls[3].config.data).toEqual({ start_time: '1701328075494', api_ids: ['flow_api'] });
         expect(calls[8].data).toEqual({ user_id: 'user_id', opinion: '同意' });
+    });
+
+    it('wraps function, automation, builder page, and global config endpoints', async () => {
+        const { client, calls } = createMockClient();
+
+        await client.function.invoke({ name: 'sync_store', params: { store_id: 'record_id' } });
+        await client.automation.v1.execute({
+            flow_api_name: 'flow_v1',
+            operator: { _id: 100, email: 'operator@example.com' },
+            params: { store_id: 'record_id' }
+        });
+        await client.automation.v2.execute({
+            flow_api_name: 'flow_v2',
+            operator: { _id: 100, email: 'operator@example.com' },
+            params: { store_id: 'record_id' },
+            is_resubmit: true,
+            pre_instance_id: 'instance_id'
+        });
+        await client.page.list({ limit: 10, offset: 0 });
+        await client.page.detail({ page_id: 'page_id' });
+        await client.page.url({
+            page_id: 'page_id',
+            pageParams: { id: 'record_id' },
+            navId: 'nav_id',
+            tabId: 'tab_id'
+        });
+        await client.global.options.detail({ api_name: 'store_status' });
+        await client.global.options.list({ limit: 20, offset: 0, filter: { quickQuery: 'status' } });
+        await client.global.variables.detail({ api_name: 'current_region' });
+        await client.global.variables.list({ limit: 20, offset: 0 });
+
+        expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+            'POST /api/cloudfunction/v1/namespaces/package_test__c/invoke/sync_store',
+            'POST /api/flow/v1/namespaces/package_test__c/flows/flow_v1/execute',
+            'POST /v2/namespaces/package_test__c/flows/flow_v2/execute',
+            'POST /api/builder/v1/namespaces/package_test__c/meta/pages',
+            'GET /api/builder/v1/namespaces/package_test__c/meta/pages/page_id',
+            'POST /api/builder/v1/namespaces/package_test__c/meta/pages/page_id/link',
+            'GET /api/data/v1/namespaces/package_test__c/globalOptions/store_status',
+            'POST /api/data/v1/namespaces/package_test__c/globalOptions/list',
+            'GET /api/data/v1/namespaces/package_test__c/globalVariables/current_region',
+            'POST /api/data/v1/namespaces/package_test__c/globalVariables/list'
+        ]);
+        expect(calls[0].data).toEqual({ params: { store_id: 'record_id' } });
+        expect(calls[1].data).toEqual({
+            operator: { _id: 100, email: 'operator@example.com' },
+            params: { store_id: 'record_id' }
+        });
+        expect(calls[2].data).toEqual({
+            operator: { _id: 100, email: 'operator@example.com' },
+            params: { store_id: 'record_id' },
+            is_resubmit: true,
+            pre_instance_id: 'instance_id'
+        });
+        expect(calls[5].data).toEqual({
+            pageParams: { id: 'record_id' },
+            navId: 'nav_id',
+            tabId: 'tab_id'
+        });
+        expect(calls[7].data).toEqual({ limit: 20, offset: 0, filter: { quickQuery: 'status' } });
+        expect(calls[9].data).toEqual({ limit: 20, offset: 0 });
+    });
+
+    it('wraps Feishu user and department ID exchange endpoints with explicit input ID types', async () => {
+        const { client, calls } = createMockClient();
+
+        await client.department.exchange({
+            department_id_type: 'external_open_department_id',
+            department_id: 'oc_xxx'
+        });
+        await client.department.batchExchange({
+            department_id_type: 'department_id',
+            department_ids: ['d1', 'd2']
+        });
+        await client.user.exchange({
+            user_id_type: 'external_open_id',
+            user_id: 'ou_xxx',
+            feishu_app_id: 'cli_xxx'
+        });
+        await client.user.batchExchange({
+            user_id_type: 'external_user_id',
+            user_ids: ['u1', 'u2'],
+            feishu_app_id: 'cli_xxx'
+        });
+
+        expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+            'POST /api/integration/v2/feishu/getDepartments',
+            'POST /api/integration/v2/feishu/getDepartments',
+            'POST /api/integration/v2/feishu/getUsers',
+            'POST /api/integration/v2/feishu/getUsers'
+        ]);
+        expect(calls[0].data).toEqual({
+            department_id_type: 'external_open_department_id',
+            department_ids: ['oc_xxx']
+        });
+        expect(calls[1].data).toEqual({
+            department_id_type: 'department_id',
+            department_ids: ['d1', 'd2']
+        });
+        expect(calls[2].data).toEqual({
+            user_id_type: 'external_open_id',
+            feishu_app_id: 'cli_xxx',
+            user_ids: ['ou_xxx']
+        });
+        expect(calls[3].data).toEqual({
+            user_id_type: 'external_user_id',
+            feishu_app_id: 'cli_xxx',
+            user_ids: ['u1', 'u2']
+        });
+    });
+
+    it('wraps attachment file and avatar endpoints with binary download options', async () => {
+        const { client, calls } = createMockClient();
+
+        await client.attachment.file.upload({ file: Buffer.from('file') });
+        await client.attachment.file.download({ file_id: 'file_token' });
+        await client.attachment.file.delete({ file_id: 'file_token' });
+        await client.attachment.avatar.upload({ image: Buffer.from('image') });
+        await client.attachment.avatar.download({ image_id: 'image_token' });
+
+        expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+            'POST /api/attachment/v1/files',
+            'GET /api/attachment/v1/files/file_token',
+            'DELETE /v1/files/file_token',
+            'POST /api/attachment/v1/images',
+            'GET /api/attachment/v1/images/image_token'
+        ]);
+        expect(calls[1].config.responseType).toBe('arraybuffer');
+        expect(calls[4].config.responseType).toBe('arraybuffer');
     });
 });

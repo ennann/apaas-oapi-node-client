@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Attachment"
+  short_description: "aPaaS 附件文件与头像图片上传下载删除安全指南"
+  default_prompt: "Use $apaas-attachment to upload, download, or delete aPaaS files and avatars."

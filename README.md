@@ -41,11 +41,12 @@
 | --- | --- |
 | `apaas-shared` | Client 初始化、凭证安全、namespace、token、日志、OpenAPI 覆盖、分页与错误码处理 |
 | `apaas-object` | 对象列表、字段元数据、记录查询/创建/更新/删除、OQL、跨对象搜索、常量对象、数据集 |
-| `apaas-schema` | 对象和字段结构管理、字段类型映射、lookup/reference 依赖规则 |
+| `apaas-object-schema` | 对象结构管理、字段类型映射、lookup/reference 依赖规则 |
 | `apaas-function-flow` | 云函数调用、自动化流程 v1/v2 执行、工作流人工任务、飞书集成 token |
 | `apaas-builder` | 页面列表、页面详情、页面访问链接 |
 | `apaas-global` | 全局选项、环境变量读取与审计 |
-| `apaas-exchange-attachment` | 用户/部门 ID 交换、附件和头像上传下载 |
+| `apaas-lark-id-exchange` | 用户/部门飞书/Lark ID 互换，包含单个和批量映射 |
+| `apaas-attachment` | 附件文件与头像图片上传、下载、删除 |
 
 从仓库根目录安装到 Codex Skill 目录：
 
@@ -58,6 +59,24 @@ cp -R skills/apaas-* "${CODEX_HOME:-$HOME/.codex}/skills/"
 
 ```bash
 npx skills add https://github.com/ennann/apaas-oapi-node-client --skill apaas-object
+```
+
+安装 ID 互换 Skill：
+
+```bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --skill apaas-lark-id-exchange
+```
+
+安装附件 Skill：
+
+```bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --skill apaas-attachment
+```
+
+安装对象结构 Skill：
+
+```bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --skill apaas-object-schema
 ```
 
 安装全部 aPaaS Skills：
@@ -89,7 +108,7 @@ cp -R node_modules/apaas-oapi-client/skills/apaas-* "${CODEX_HOME:-$HOME/.codex}
 
 - 写入前先用 `apaas-object` 读取真实 metadata。
 - 大量读取优先使用 iterator 或 `apaas-object/references/id-cursor-pagination.md`。
-- Schema 字段变更前先读 `apaas-schema/references/field-schema-rules.md`。
+- 对象结构字段变更前先读 `apaas-object-schema/references/field-schema-rules.md`。
 - 删除、批量写入、流程执行都按写操作处理，先确认目标和影响。
 
 ---
@@ -118,7 +137,7 @@ const client = new apaas.Client({
 await client.init();
 
 // 安全创建数据对象：空壳 -> 基础字段 -> lookup -> reference_field -> final settings
-await client.schema.createWithStages({
+await client.object.schema.createWithStages({
     objects: [{
         api_name: 'product',
         label: { zh_cn: '产品', en_us: 'Product' },
@@ -148,7 +167,7 @@ await client.schema.createWithStages({
 });
 
 // 更新对象：添加字段
-await client.schema.update({
+await client.object.schema.update({
     objects: [{
         api_name: 'product',
         fields: [{
@@ -171,8 +190,10 @@ await client.schema.update({
 });
 
 // 三层响应校验：请求级错误、data=null 静默失败、item 级失败
-client.schema.checkResponse({ code: '0', data: { items: [] } }, 'schema.update');
+client.object.schema.checkResponse({ code: '0', data: { items: [] } }, 'object.schema.update');
 ```
+
+`client.schema.*` 会继续作为兼容入口保留；新代码推荐使用 `client.object.schema.*`，语义更明确。
 
 ---
 

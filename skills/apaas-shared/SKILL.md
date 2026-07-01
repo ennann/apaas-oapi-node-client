@@ -42,11 +42,12 @@ client.setLoggerLevel(3);
 
 - Object metadata and record CRUD: use `apaas-object`.
 - OQL, cross-object search, constant objects, and datasets: use `apaas-object`.
-- Object and field schema changes: use `apaas-schema`.
+- Object schema and field structure changes: use `apaas-object-schema`.
 - Cloud functions, automation flows, workflow status, user tasks, and Lark integration tokens: use `apaas-function-flow`.
 - Builder page metadata and links: use `apaas-builder`.
 - Global options and variables: use `apaas-global`.
-- User/department ID exchange and attachments: use `apaas-exchange-attachment`.
+- User/department Feishu/Lark ID exchange: use `apaas-lark-id-exchange`.
+- File and avatar upload/download/delete: use `apaas-attachment`.
 
 ## Error Triage
 

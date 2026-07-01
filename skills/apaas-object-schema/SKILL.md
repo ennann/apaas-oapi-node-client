@@ -1,11 +1,13 @@
 ---
-name: apaas-schema
-description: "Use for aPaaS Node SDK schema management: creating objects, updating object labels/settings, adding/replacing/removing fields, deleting objects, field type mapping, lookup/reference field dependencies, and schema change safety checks."
+name: apaas-object-schema
+description: "Use for aPaaS Node SDK object schema management with client.object.schema.*: creating objects, updating object labels/settings, adding/replacing/removing fields, deleting objects, field type mapping, lookup/reference field dependencies, SQL/ER conversion, staged creation, and schema change safety checks. client.schema.* remains a compatibility alias."
 ---
 
-# aPaaS Schema
+# aPaaS Object Schema
 
-Use this skill for `client.schema.*`.
+## Overview
+
+Use this skill for object structure edits through `client.object.schema.*`. `client.schema.*` remains a compatibility alias for older code.
 
 ## Required References
 
@@ -17,17 +19,17 @@ Use this skill for `client.schema.*`.
 1. Use `apaas-shared` to initialize the client.
 2. Read current objects with `client.object.listWithIterator()`.
 3. Read existing fields with `client.object.metadata.fields({ object_name })`.
-4. Prefer `client.schema.createWithStages()` for new objects with fields.
-5. Use `client.schema.addFieldsIdempotent()` when adding fields to an existing object.
-6. Check raw schema write responses with `client.schema.checkResponse()`.
-7. After the call, use `client.schema.verifyObjects()` to verify the effective schema.
+4. Prefer `client.object.schema.createWithStages()` for new objects with fields.
+5. Use `client.object.schema.addFieldsIdempotent()` when adding fields to an existing object.
+6. Check raw object schema write responses with `client.object.schema.checkResponse()`.
+7. After the call, use `client.object.schema.verifyObjects()` to verify the effective structure.
 
 ## Create Object
 
 Create objects through the SDK staging helper when fields are involved. It creates shells first, then base fields, then lookup fields, then reference fields, then final settings.
 
 ```ts
-await client.schema.createWithStages({
+await client.object.schema.createWithStages({
   objects: [{
     api_name: "product",
     label: { zh_cn: "产品", en_us: "Product" },
@@ -64,7 +66,7 @@ await client.schema.createWithStages({
 - Update label/settings without field changes by omitting `fields`.
 
 ```ts
-await client.schema.addFieldsIdempotent({
+await client.object.schema.addFieldsIdempotent({
   object_name: "product",
   fields: [{
     operator: "add",
@@ -87,7 +89,7 @@ await client.schema.addFieldsIdempotent({
 
 ## Delete Rules
 
-- Confirm the object API names before `client.schema.delete`.
+- Confirm the object API names before `client.object.schema.delete`.
 - Do not delete objects as a cleanup shortcut if records or references may still depend on them.
 - Remove `reference_field` before removing its lookup field.
-- For environment rebuilds, use `client.schema.deleteAllCustomObjects({ confirm: true })`.
+- For environment rebuilds, use `client.object.schema.deleteAllCustomObjects({ confirm: true })`.

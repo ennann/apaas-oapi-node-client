@@ -159,7 +159,7 @@ export const SCHEMA_GUIDELINES = {
         description: '更新字段时必须指定操作类型',
         options: {
             add: { description: '添加新字段', required_fields: ['api_name', 'label', 'type'] },
-            replace: { description: '修改现有字段', required_fields: ['api_name'], note: '只传需要修改的属性' },
+            replace: { description: '修改现有字段', required_fields: ['api_name', 'label', 'type'], note: '必须传完整 type（name + settings），仅修改标签也要带当前字段类型配置' },
             remove: { description: '删除字段', required_fields: ['api_name'], note: '只需要 api_name' },
         },
     },
@@ -340,7 +340,16 @@ export const UPDATE_OBJECT_REPLACE_FIELD_EXAMPLE: UpdateObjectDefinition = {
             operator: 'replace', // 修改现有字段
             api_name: 'price',
             label: { zh_cn: '销售价格', en_us: 'Sale Price' }, // 修改标签
-            // 可以只传需要修改的属性
+            type: {
+                name: 'float',
+                settings: {
+                    required: false,
+                    unique: false,
+                    display_as_percentage: false,
+                    decimal_places_number: 2,
+                },
+            },
+            encrypt_type: 'none',
         },
     ],
 };

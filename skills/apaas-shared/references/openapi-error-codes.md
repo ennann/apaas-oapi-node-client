@@ -31,7 +31,7 @@ The 2026-06-30 API doc bundle listed 531 error codes:
 | `k_ec_000009` | 权限不足 | Verify app permission, namespace, and API credential scope. |
 | `k_ec_000011` | 缺少必填参数 | Compare payload with SDK method params and doc body/query/path fields. |
 | `k_ec_000012` | 必填参数为空 | Check empty strings, empty arrays, and missing nested fields. |
-| `k_ec_000015` | 请求参数不合法 | Read `msg`; for schema writes also run `client.schema.validateResponse`. |
+| `k_ec_000015` | 请求参数不合法 | Read `msg`; for object schema writes also run `client.object.schema.validateResponse`. |
 | `k_op_ec_10100` | 请求参数不合法 | Validate body shape and enum values. |
 | `k_op_ec_10101` | 无法解析 body | Check JSON serialization and `Content-Type: application/json`. |
 | `k_op_ec_10102` | URL 路径参数错误 | Check path params such as object, field, task, flow, or integration API names. |
@@ -52,4 +52,4 @@ The 2026-06-30 API doc bundle listed 531 error codes:
 - Do not rely on HTTP status alone.
 - Log `code`, `msg`, and safe request identifiers; do not log secrets or access tokens.
 - For batch APIs, inspect item-level status in `data.items` because the request can be partially successful.
-- For schema writes, `code: "0"` with `data: null` is a silent failure and must be treated as failed.
+- For object schema writes, `code: "0"` with `data: null` is a silent failure and must be treated as failed.

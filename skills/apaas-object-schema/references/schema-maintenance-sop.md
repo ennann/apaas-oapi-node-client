@@ -7,8 +7,8 @@ Use this reference for whole-application object maintenance: reading object stru
 - Read live object metadata before writing.
 - Do not modify or delete system objects `_user` and `_department`.
 - Do not create, replace, or remove fields whose API name starts with `_`.
-- Treat `schema.create`, `schema.update`, and `schema.delete` as high-risk writes.
-- Batch `schema.create/update/delete` calls by at most 10 objects.
+- Treat `client.object.schema.create`, `client.object.schema.update`, and `client.object.schema.delete` as high-risk writes.
+- Batch object schema create/update/delete calls by at most 10 objects.
 - After every write, re-read metadata and verify the expected object/field shape.
 
 ## Response Validation
@@ -16,23 +16,23 @@ Use this reference for whole-application object maintenance: reading object stru
 Check three layers after every raw schema call with the SDK helper:
 
 ```ts
-client.schema.checkResponse(result, "schema.update");
+client.object.schema.checkResponse(result, "object.schema.update");
 ```
 
 `code: "0"` with `data: null` is not success. It usually means a required setting is missing, for example `text.multiline` or `auto_number.generation_method`.
 
 ## Create Objects: Three Stages
 
-Do not create a full object with raw `schema.create({ fields })`. Use `client.schema.createWithStages()` when fields are involved. It enforces this sequence even when there is no obvious dependency cycle.
+Do not create a full object with raw `client.object.schema.create({ fields })`. Use `client.object.schema.createWithStages()` when fields are involved. It enforces this sequence even when there is no obvious dependency cycle.
 
 1. Stage 1a: create object shells only.
-2. Stage 1b: add base fields with `schema.update` and `operator: "add"`.
+2. Stage 1b: add base fields with `object.schema.update` and `operator: "add"`.
 3. Stage 2: add `lookup` / `lookup_multi` fields after all target objects exist.
 4. Stage 3: add `reference_field` after its single-value lookup exists.
 5. Final: update `display_name`, `allow_search_fields`, and `search_layout` after fields exist.
 
 ```ts
-await client.schema.createWithStages({
+await client.object.schema.createWithStages({
   objects: [{
     api_name: "customer",
     label: { zh_cn: "客户", en_us: "Customer" },
@@ -65,7 +65,7 @@ await client.schema.createWithStages({
 - Skip existing fields when rerunning idempotently.
 
 ```ts
-await client.schema.addFieldsIdempotent({
+await client.object.schema.addFieldsIdempotent({
   object_name: "customer",
   fields: fieldsToAdd
 });
@@ -87,14 +87,14 @@ Remove order:
 3. Other custom fields
 4. Custom objects
 
-Never add a lookup and a reference field that depends on it in the same `schema.update` batch; execution order is not guaranteed.
+Never add a lookup and a reference field that depends on it in the same `object.schema.update` batch; execution order is not guaranteed.
 
 ## Delete All Custom Objects
 
 Use the SDK helper for environment cleanup or model rebuilds:
 
 ```ts
-await client.schema.deleteAllCustomObjects({
+await client.object.schema.deleteAllCustomObjects({
   confirm: true,
   removeOtherFields: true
 });

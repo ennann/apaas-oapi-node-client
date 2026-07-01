@@ -122,6 +122,9 @@ interface RetryOptions {
     backoffMultiplier?: number;
 }
 
+type DepartmentIdType = 'department_id' | 'external_department_id' | 'external_open_department_id';
+type UserIdType = 'user_id' | 'external_user_id' | 'external_open_id';
+
 /**
  * 判断错误是否可重试
  */
@@ -258,6 +261,7 @@ class Client {
             baseURL: 'https://ae-openapi.feishu.cn',
             headers: { 'Content-Type': 'application/json' }
         });
+        this.object.schema = this.schema;
         this.log(LoggerLevel.info, '[client] Client initialized successfully');
     }
 
@@ -383,6 +387,12 @@ class Client {
      * 对象模块
      */
     public object = {
+        /**
+         * 对象结构编辑入口。推荐使用 `client.object.schema.*`；
+         * `client.schema.*` 会继续作为兼容别名保留。
+         */
+        schema: undefined as unknown as typeof this.schema,
+
         /**
          * 列出所有对象（数据表）
          * @param params 请求参数 { offset?, filter?, limit? }
@@ -1743,9 +1753,9 @@ class Client {
          * @param params 请求参数
          * @returns 单个部门映射结果
          */
-        exchange: async (params: { department_id_type: 'department_id' | 'external_department_id' | 'external_open_department_id'; department_id: string }): Promise<any> => {
+        exchange: async (params: { department_id_type: DepartmentIdType; department_id: string }): Promise<any> => {
             const { department_id_type, department_id } = params;
-            // department_id_type 可选值：
+            // department_id_type 表示传入 ID 的类型，接口会返回同一部门的其他 ID 映射。
             // - 'department_id' (如 "1758534140403815")
             // - 'external_department_id' (外部平台 department_id, 无固定格式)
             // - 'external_open_department_id' (以 'oc_' 开头的 open_department_id)
@@ -1788,12 +1798,12 @@ class Client {
          * @returns 批量操作结果，包含成功和失败的详细信息
          */
         batchExchange: async (params: {
-            department_id_type: 'department_id' | 'external_department_id' | 'external_open_department_id';
+            department_id_type: DepartmentIdType;
             department_ids: string[];
             retryOptions?: RetryOptions;
         }): Promise<BatchResult<any>> => {
             const { department_id_type, department_ids, retryOptions } = params;
-            // department_id_type 可选值：
+            // department_id_type 表示传入 ID 的类型，接口会返回同一部门的其他 ID 映射。
             // - 'department_id' (如 "1758534140403815")
             // - 'external_department_id' (外部平台 department_id, 无固定格式)
             // - 'external_open_department_id' (以 'oc_' 开头的 open_department_id)
@@ -1898,9 +1908,9 @@ class Client {
          * @param params 请求参数
          * @returns 单个用户映射结果
          */
-        exchange: async (params: { user_id_type: 'user_id' | 'external_user_id' | 'external_open_id'; user_id: string; feishu_app_id: string }): Promise<any> => {
+        exchange: async (params: { user_id_type: UserIdType; user_id: string; feishu_app_id: string }): Promise<any> => {
             const { user_id_type, user_id, feishu_app_id } = params;
-            // user_id_type 可选值：
+            // user_id_type 表示传入 ID 的类型，接口会返回同一用户的其他 ID 映射。
             // - 'user_id' (如 "1758534140403815")
             // - 'external_user_id' (外部平台 user_id, 无固定格式)
             // - 'external_open_id' (以 'ou_' 开头的 open_id)
@@ -1944,13 +1954,13 @@ class Client {
          * @returns 批量操作结果，包含成功和失败的详细信息
          */
         batchExchange: async (params: {
-            user_id_type: 'user_id' | 'external_user_id' | 'external_open_id';
+            user_id_type: UserIdType;
             user_ids: string[];
             feishu_app_id: string;
             retryOptions?: RetryOptions;
         }): Promise<BatchResult<any>> => {
             const { user_id_type, user_ids, feishu_app_id, retryOptions } = params;
-            // user_id_type 可选值：
+            // user_id_type 表示传入 ID 的类型，接口会返回同一用户的其他 ID 映射。
             // - 'user_id' (如 "1758534140403815")
             // - 'external_user_id' (外部平台 user_id, 无固定格式)
             // - 'external_open_id' (以 'ou_' 开头的 open_id)
@@ -3250,7 +3260,7 @@ class Client {
          * @example
          * ```typescript
          * // 添加新字段
-         * await client.schema.update({
+         * await client.object.schema.update({
          *   objects: [{
          *     api_name: 'my_object',
          *     fields: [{
@@ -3264,19 +3274,21 @@ class Client {
          * });
          * 
          * // 修改现有字段
-         * await client.schema.update({
+         * await client.object.schema.update({
          *   objects: [{
          *     api_name: 'my_object',
          *     fields: [{
          *       operator: 'replace',
          *       api_name: 'existing_field',
-         *       label: { zh_cn: '新标签', en_us: 'New Label' }
+         *       label: { zh_cn: '新标签', en_us: 'New Label' },
+         *       type: { name: 'text', settings: { required: false, unique: false, case_sensitive: false, multiline: false, max_length: 100 } },
+         *       encrypt_type: 'none'
          *     }]
          *   }]
          * });
          * 
          * // 删除字段
-         * await client.schema.update({
+         * await client.object.schema.update({
          *   objects: [{
          *     api_name: 'my_object',
          *     fields: [{
@@ -3354,10 +3366,10 @@ class Client {
          * @example
          * ```typescript
          * // 删除单个对象
-         * await client.schema.delete({ api_names: ['object_abc'] });
+         * await client.object.schema.delete({ api_names: ['object_abc'] });
          * 
          * // 删除多个对象
-         * await client.schema.delete({ api_names: ['object_abc', 'object_def'] });
+         * await client.object.schema.delete({ api_names: ['object_abc', 'object_def'] });
          * ```
          */
         delete: async (params: { api_names: string[] }): Promise<any> => {
@@ -3394,17 +3406,17 @@ class Client {
         },
 
         /**
-         * 校验 schema 写接口响应，覆盖请求级错误、data=null 静默失败、item 级失败。
+         * 校验对象结构写接口响应，覆盖请求级错误、data=null 静默失败、item 级失败。
          */
         checkResponse: checkSchemaResponse,
 
         /**
-         * 返回 schema 写接口响应校验结果，不抛错。
+         * 返回对象结构写接口响应校验结果，不抛错。
          */
         validateResponse: validateSchemaResponse,
 
         /**
-         * 按 schema 单批 10 个对象的限制分批执行。
+         * 按对象结构接口单批 10 个对象的限制分批执行。
          */
         batchExecute,
 
@@ -3416,7 +3428,7 @@ class Client {
         },
 
         /**
-         * 幂等添加字段：先读 metadata，跳过已存在字段，再调用 schema.update。
+         * 幂等添加字段：先读 metadata，跳过已存在字段，再调用 object.schema.update。
          */
         addFieldsIdempotent: async (params: {
             object_name: string;
@@ -3459,6 +3471,8 @@ export const apaas = {
 export type { 
     BatchResult, 
     RetryOptions, 
+    DepartmentIdType,
+    UserIdType,
     FieldTypeMetadata,
     // Schema operation types
     MultilingualText,

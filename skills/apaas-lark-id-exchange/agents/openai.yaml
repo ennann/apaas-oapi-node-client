@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Lark ID Exchange"
+  short_description: "aPaaS 用户和部门飞书/Lark ID 互换指南"
+  default_prompt: "Use $apaas-lark-id-exchange to exchange user or department IDs with the aPaaS Node SDK."

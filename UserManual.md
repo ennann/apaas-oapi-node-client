@@ -68,6 +68,68 @@ main();
 
 
 
+## **🤖 AI Agent / Skills 使用说明**
+
+本 SDK 随包提供面向 AI Agent 的模块化 Skills，目录位于 `skills/`。推荐让 Agent 先使用 `apaas-shared` 读取通用规则，再按任务选择具体 Skill。
+
+| **Skill** | **适用场景** |
+| :-- | :-- |
+| `apaas-shared` | Client 初始化、凭证安全、namespace、token、日志、OpenAPI 覆盖、分页与错误码处理 |
+| `apaas-object` | 对象列表、字段元数据、记录查询/创建/更新/删除、OQL、跨对象搜索、常量对象、数据集 |
+| `apaas-object-schema` | 对象结构管理、字段类型映射、lookup/reference 依赖规则 |
+| `apaas-function-flow` | 云函数调用、自动化流程 v1/v2 执行、工作流人工任务、飞书集成 token |
+| `apaas-builder` | 页面列表、页面详情、页面访问链接 |
+| `apaas-global` | 全局选项、环境变量读取与审计 |
+| `apaas-lark-id-exchange` | 用户/部门飞书/Lark ID 互换，包含单个和批量映射 |
+| `apaas-attachment` | 附件文件与头像图片上传、下载、删除 |
+
+### **安装 Skills**
+
+从 GitHub 安装单个 Skill：
+
+```Bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --skill apaas-object
+```
+
+安装全部 aPaaS Skills：
+
+```Bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --skill '*'
+```
+
+查看仓库内可安装的 Skills：
+
+```Bash
+npx skills add https://github.com/ennann/apaas-oapi-node-client --list
+```
+
+从 npm 包安装到本机 Codex Skill 目录：
+
+```Bash
+npx apaas-oapi-client install-skills
+```
+
+或从已安装依赖的项目中复制：
+
+```Bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R node_modules/apaas-oapi-client/skills/apaas-* "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+### **选择规则**
+
+- 写入记录、查询记录、OQL、常量对象、数据集：使用 `apaas-object`。
+- 新建对象、改字段、删字段、删对象：使用 `apaas-object-schema`。
+- 对象结构变更前，Agent 应先读取 `apaas-object-schema/references/field-schema-rules.md`。
+- 大量读取优先使用 iterator 或 `apaas-object/references/id-cursor-pagination.md`。
+- 删除、批量写入、流程执行、结构变更都按高风险写操作处理，执行前确认目标和影响。
+
+`client.object.schema.*` 是对象结构编辑的推荐入口；`client.schema.*` 仍作为旧代码兼容入口保留。
+
+***
+
+
+
 ## **🔐 认证**
 
 ### **初始化 Client**
@@ -632,6 +694,14 @@ console.log(res);
 
 ## **部门 ID 交换**
 
+`department_id_type` 表示传入 ID 的类型，接口会返回同一个部门的其他 ID 映射，不是选择输出字段。
+
+可选值：
+
+- `department_id`：aPaaS/Lark 部门 ID，例如 `1758534140403815`
+- `external_department_id`：外部平台部门 ID，无固定格式
+- `external_open_department_id`：外部 open department ID，通常以 `oc_` 开头
+
 ### **单个部门 ID 交换**
 
 ```JavaScript
@@ -644,12 +714,52 @@ console.log(res);
 
 ### **批量部门 ID 交换**
 
-每次最多 100 个，SDK 已自动拆分限流。
+每次最多 200 个，SDK 已自动拆分限流。
 
 ```JavaScript
 const res = await client.department.batchExchange({
   department_id_type: 'external_department_id',
   department_ids: ['id1', 'id2', 'id3']
+});
+console.log(res);
+```
+
+***
+
+<br>
+
+# **👤 用户模块**
+
+## **用户 ID 交换**
+
+`user_id_type` 表示传入 ID 的类型，接口会返回同一个用户的其他 ID 映射，不是选择输出字段。用户 ID 交换必须传真实 `feishu_app_id`。
+
+可选值：
+
+- `user_id`：aPaaS/Lark 用户 ID，例如 `1758534140403815`
+- `external_user_id`：外部平台用户 ID，无固定格式
+- `external_open_id`：外部 open ID，通常以 `ou_` 开头
+
+### **单个用户 ID 交换**
+
+```JavaScript
+const res = await client.user.exchange({
+  user_id_type: 'external_open_id',
+  user_id: 'ou_xxx',
+  feishu_app_id: 'cli_xxx'
+});
+console.log(res);
+```
+
+### **批量用户 ID 交换**
+
+每次最多 200 个，SDK 已自动拆分限流。返回后需要检查 `failedCount` 和 `failed`。
+
+```JavaScript
+const res = await client.user.batchExchange({
+  user_id_type: 'external_user_id',
+  user_ids: ['u1', 'u2', 'u3'],
+  feishu_app_id: 'cli_xxx'
 });
 console.log(res);
 ```

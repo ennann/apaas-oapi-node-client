@@ -1,6 +1,6 @@
 # Field Schema Rules
 
-Use this reference before `client.schema.create` or `client.schema.update` field changes.
+Use this reference before `client.object.schema.create` or `client.object.schema.update` field changes. `client.schema.*` is only the compatibility alias.
 
 - Verified source in this repo: `src/FIELD_SCHEMA_RULES.md`
 - Machine-readable source: `src/field-schema-rules.ts`
@@ -87,7 +87,7 @@ blue, cyan, green, yellow, orange, red, magenta, purple, blueMagenta, grey, blue
 }
 ```
 
-`schema.create` / `schema.update` must use create shape:
+`object.schema.create` / `object.schema.update` must use create shape:
 
 ```ts
 {
@@ -121,7 +121,7 @@ OpenAPI write payloads require color short codes, while metadata returns color n
 | `blueMagenta` | `I` |
 | `grey` | `N` |
 
-Do not copy metadata `optionList` back into `schema.update`; convert it to `options`.
+Do not copy metadata `optionList` back into `object.schema.update`; convert it to `options`.
 
 Use `getOptionColor(index)` from the SDK to assign metadata color names in this stable 10-color cycle. Use `getOptionColorCode(color)` only when constructing raw OpenAPI payloads outside the SDK normalizer.
 

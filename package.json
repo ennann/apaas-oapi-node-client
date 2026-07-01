@@ -1,6 +1,6 @@
 {
     "name": "apaas-oapi-client",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "main": "dist/index.js",
     "bin": {
         "apaas-oapi-client": "bin/apaas-oapi-client.js"
@@ -32,7 +32,7 @@
     },
     "license": "ISC",
     "dependencies": {
-        "axios": "^1.10.0",
+        "axios": "^1.18.1",
         "bottleneck": "^2.19.5",
         "dayjs": "^1.11.13"
     },
@@ -44,9 +44,9 @@
         "@types/node": "^24.0.7",
         "jest": "^30.0.3",
         "rollup": "^4.44.1",
-        "rollup-plugin-typescript2": "^0.36.0",
+        "rollup-plugin-typescript2": "^0.37.0",
         "ts-jest": "^29.4.0",
-        "tsx": "^4.21.0",
+        "tsx": "^4.22.4",
         "typescript": "^5.8.3"
     },
     "description": "aPaaS OpenAPI Node.js 客户端 SDK，内置 AI Agent 友好的模块化 Skills 与 Schema 辅助规则。"

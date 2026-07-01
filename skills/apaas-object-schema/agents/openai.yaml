@@ -1,0 +1,4 @@
+interface:
+  display_name: "aPaaS Object Schema"
+  short_description: "aPaaS 对象结构和字段依赖规则管理安全操作指南"
+  default_prompt: "Use $apaas-object-schema to create or update aPaaS object schemas safely."
